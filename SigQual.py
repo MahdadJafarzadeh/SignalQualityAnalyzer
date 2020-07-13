@@ -114,75 +114,6 @@ class SigQual:
         
         return fs_res, data1, data2
     
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Plot section ~~~~~~~~~~~~~~~~~~~~~~~~~ #
-    
-    #%% plot EDF
-    def plot_edf(self, data, higpass = .1, lowpass = 30, duration = 30, n_channels =1):
-        
-        data.plot(duration = duration, highpass = higpass , lowpass = lowpass, n_channels = n_channels)
-        
-    #%% Save plot
-    def save_figure(self, directory, saving_name, dpi, saving_format = '.png',
-                full_screen = False):
-        if full_screen == True:
-            manager = plt.get_current_fig_manager()
-            manager.window.showMaximized()
-        plt.savefig(directory+saving_name+saving_format,dpi = dpi)   
-    #%% plot spectrogram
-    def spectrogram_creation(self, sig1, sig2, fs, save_name, save_fig = False, dpi = 1000,\
-                             save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis"):
-        
-        from lspopt import spectrogram_lspopt
-        import numpy as np
-        import matplotlib.pyplot as plt
-    
-        #==== plot 1st sig =======   
-        f, t, Sxx = spectrogram_lspopt(x=sig1, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
-                                       scaling='density')
-        Sxx = 10 * np.log10(Sxx) #power to db
-            
-        # Limit Sxx to the largest freq of interest:
-        f_sig1 = f[0:750]
-        Sxx_sig1 = Sxx[0:750, :]
-        fig, axs = plt.subplots(2,1, figsize=(26, 14))
-        plt.axes(axs[0])
-        
-        plt.pcolormesh(t, f_sig1, Sxx_sig1)
-        plt.ylabel('Frequency [Hz]', size=15)
-        #plt.xlabel('Time [sec]', size=15)
-        plt.title('Somnoscreeen data (F4) - Multi-taper Spectrogram', size=20)
-        plt.colorbar()
-        # ==== plot 2nd sig ==== #
-        plt.axes(axs[1])
-        f, t, Sxx = spectrogram_lspopt(x=sig2, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
-                                       scaling='density')
-        Sxx = 10 * np.log10(Sxx) #power to db
-            
-        # Limit Sxx to the largest freq of interest:
-        f_sig2 = f[0:750]
-        Sxx_sig2 = Sxx[0:750, :]
-        plt.pcolormesh(t, f_sig2, Sxx_sig2)
-        plt.ylabel('Frequency [Hz]', size=15)
-        plt.xlabel('Time [sec]', size=15)
-        plt.title('Zmax data (EEG right) - Multi-taper Spectrogram ', size=20)
-    
-        plt.colorbar()
-        #==== 1st Way =======
-        
-        #=== Maximize ====
-        figure = plt.gcf()  # get current figure
-        figure.set_size_inches(32, 18)
-        plt.show()
-        
-        #Save figure
-        if save_fig == True:
-            self.save_figure(directory=save_dir, saving_name= save_name,
-                         dpi=dpi, saving_format = '.png',
-                         full_screen = False)
-            
-        #=== Maximize ====
-        return f_sig1, f_sig2, Sxx_sig1, Sxx_sig2
-    
     #%% Synchronization section
     def sync_data(self, fs_res, LRLR_start_zmax, LRLR_end_zmax, LRLR_start_somno, LRLR_end_somno,\
                   data_R_resampled_filtered, data_L_resampled_filtered, \
@@ -395,18 +326,98 @@ class SigQual:
         plt.ylabel('Amplitude (v)', size = 15)
         plt.legend(prop={"size":20}, loc = "upper right") 
         
+        return zmax_final, somno_final
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Plot section ~~~~~~~~~~~~~~~~~~~~~~~~~ #
+    
+    #%% plot EDF
+    def plot_edf(self, data, higpass = .1, lowpass = 30, duration = 30, n_channels =1):
+        
+        data.plot(duration = duration, highpass = higpass , lowpass = lowpass, n_channels = n_channels)
+        
+    #%% Save plot
+    def save_figure(self, directory, saving_name, dpi, saving_format = '.png',
+                full_screen = False):
+        if full_screen == True:
+            manager = plt.get_current_fig_manager()
+            manager.window.showMaximized()
+        plt.savefig(directory+saving_name+saving_format,dpi = dpi)  
+        
+    #%% plot spectrogram
+    def spectrogram_creation(self, sig1, sig2, fs, save_name, save_fig = False, dpi = 1000,\
+                             save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis"):
+        
+        from lspopt import spectrogram_lspopt
+        import numpy as np
+        import matplotlib.pyplot as plt
+    
+        #==== plot 1st sig =======   
+        f, t, Sxx = spectrogram_lspopt(x=sig1, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+                                       scaling='density')
+        Sxx = 10 * np.log10(Sxx) #power to db
             
-    #%% Plot PSD
-    def plot_psd(self, zmax_full_sig, somno_full_sig, fs_res):
+        # Limit Sxx to the largest freq of interest:
+        f_sig1 = f[0:750]
+        Sxx_sig1 = Sxx[0:750, :]
+        fig, axs = plt.subplots(2,1, figsize=(26, 14))
+        plt.axes(axs[0])
+        
+        plt.pcolormesh(t, f_sig1, Sxx_sig1)
+        plt.ylabel('Frequency [Hz]', size=15)
+        #plt.xlabel('Time [sec]', size=15)
+        plt.title('Somnoscreeen data (F4) - Multi-taper Spectrogram', size=20)
+        plt.colorbar()
+        # ==== plot 2nd sig ==== #
+        plt.axes(axs[1])
+        f, t, Sxx = spectrogram_lspopt(x=sig2, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+                                       scaling='density')
+        Sxx = 10 * np.log10(Sxx) #power to db
+            
+        # Limit Sxx to the largest freq of interest:
+        f_sig2 = f[0:750]
+        Sxx_sig2 = Sxx[0:750, :]
+        plt.pcolormesh(t, f_sig2, Sxx_sig2)
+        plt.ylabel('Frequency [Hz]', size=15)
+        plt.xlabel('Time [sec]', size=15)
+        plt.title('Zmax data (EEG right) - Multi-taper Spectrogram ', size=20)
+    
+        plt.colorbar()
+        #==== 1st Way =======
+        
+        #=== Maximize ====
+        figure = plt.gcf()  # get current figure
+        figure.set_size_inches(32, 18)
+        plt.show()
+        
+        #Save figure
+        if save_fig == True:
+            self.save_figure(directory=save_dir, saving_name= save_name,
+                         dpi=dpi, saving_format = '.png',
+                         full_screen = False)
+            
+        #=== Maximize ====
+        return f_sig1, f_sig2, Sxx_sig1, Sxx_sig2
+    
+    #%% Computing Coherence of signals
+    def plot_coherence(self, sig1, sig2, Fs , NFFT = 256):
         plt.figure()
+        coh, f = plt.cohere(sig1, sig2, Fs = Fs, NFFT = NFFT)
+        plt.xlim([0, 30])
+        
+    #%% Plot PSD
+    def plot_psd(self, sig1, sig2, fs, NFFT = 2**11):
+        plt.figure()
+        
+        plt.figure()
+        figure = plt.gcf()  # get current figure
+        figure.set_size_inches(26, 14)
         
         # Global setting for axes values size
         plt.rc('xtick',labelsize=16)
         plt.rc('ytick',labelsize=16)
         
         # Plot power spectrums
-        plt.psd(x=zmax_full_sig,Fs = fs_res, label = 'Zmax', NFFT = 2 ** 11, scale_by_freq= True, linewidth = 2, color = 'blue')           
-        plt.psd(x=somno_full_sig,Fs = fs_res, label = 'Zmax',NFFT = 2 ** 11, scale_by_freq= True, linewidth = 2, color = 'red')     
+        psd_s1, f_psd_s1 = plt.psd(x=sig1,Fs = fs, label = 'Zmax', NFFT = NFFT, scale_by_freq= True, linewidth = 2, color = 'blue')           
+        psd_s2, f_psd_s2 = plt.psd(x=sig2,Fs = fs, label = 'somno',NFFT =NFFT, scale_by_freq= True, linewidth = 2, color = 'red')     
         # ================== plot dashed lines of freq bins ========================= #
         
         #Delta
@@ -438,9 +449,111 @@ class SigQual:
         
         # Limiting x-axis to 0-30 Hz
         plt.xlim([0, 30])
+        
+        return psd_s1, f_psd_s1, psd_s2, f_psd_s2
 
     #%% save_dic
     def save_dictionary(self, path, fname, labels_dic, features_dic):
         import pickle        
         with open(path+fname+'.pickle',"wb") as f:
             pickle.dump([features_dic, labels_dic], f)
+            
+    #%% Window by window cross correlation
+    def win_by_win_corr(self, sig1, sig2, fs, win_size = 30, plot_synced_winodws = False):
+        
+        """ This function gets the signals which have been already synced based 
+        on an event.(e.g. using self.sync_data function)
+        
+        To compensate the drift in measurement devices, this function looks into data
+        window by window, align them using cross-corr and compute measures such
+        as pearson or spearman correaltion. 
+        
+        Sig1 is the reference and windowing will be based on this. Then sig2 
+        will be shifted to find the best correlation per window.
+        
+        The elements of the output dictionarry comprises:
+        """
+        
+        # init lists/dicts to save outputs
+        list_lags            = []
+        list_pearson_corr    = []
+        list_pearson_pval    = []
+        list_spearman_corr   = []
+        list_spearman_pval   = []
+        signal1_dic_windowed = dict()
+        signal2_dic_windowed = dict()
+        Outcome_dic_windowed = dict()
+        
+        # e.g. Sig1 : Zmax , Sig2 : Somno
+        win_size    = win_size #secs
+        len_epoch   = fs * win_size
+           
+        # Define the loop of window size 
+        for i in np.arange(0, np.floor(np.shape(sig1)[0] / (fs * win_size))):
+            i = int(i)
+            
+            # define the sample range of the current window
+            lower_boundary_samples  = i * win_size * fs
+            higher_boundary_samples = (i+1) * win_size * fs
+            
+            # merging current samples
+            plotting_samples = np.arange(lower_boundary_samples, higher_boundary_samples)
+            
+            # designing current windows of both signals
+            curr_sig1 = sig1[plotting_samples]
+            curr_sig2 = sig2[plotting_samples]
+            
+            # Compute correlation
+            corr = signal.correlate(curr_sig1, curr_sig2)
+            
+            # find lag
+            lag  = np.argmax(np.abs(corr)) - len(curr_sig1) + 1
+            
+            # shift "curr_sig2" with "lag" to sync with "curr_sig1"
+            curr_sig2_synced = sig2[plotting_samples - lag]
+            
+            # Compute Pearson corr of the current win
+            pear_corr, pear_pval = self.pearson_corr(curr_sig1, curr_sig2_synced, abs_value = True , print_results = False)
+            
+            # Compute Spearman corr of the current win
+            spea_corr, spea_pval = self.spearman_corr(curr_sig1, curr_sig2_synced, abs_value = True, print_results = False)
+            
+            # Concatenate the values of pearson and spearman corr per window
+            list_pearson_corr.append(pear_corr)
+            list_pearson_pval.append(pear_pval)
+            list_spearman_corr.append(spea_corr)
+            list_spearman_pval.append(spea_pval)
+            
+            # concatenate lags per win
+            list_lags.append(lag)
+            
+            # Also keep the synced signals for any further analysis
+            signal1_dic_windowed['window'+str(i)] = curr_sig1
+            signal2_dic_windowed['window'+str(i)] = curr_sig2_synced
+            
+            if plot_synced_winodws==True:
+                # Plot before lag correction
+                plt.plot(plotting_samples, curr_sig1,label = 'Signal1 (reference)', color = 'black')
+                plt.plot(plotting_samples, curr_sig2, label = 'Signal2 ', color = 'gray', linestyle = ':')
+                plt.title('Syncing signal1 and signal2 data (Sync period only)', size = 15)
+            
+                # Plot after lag correction
+                plt.plot(plotting_samples, curr_sig2_synced, label = 'Signal2 - synced',color = 'red')
+                
+                plt.legend(prop={"size":20})
+                
+            # Remove varialbles for next iteration
+                
+        # pack all outcomes to return 
+        Outcome_dic_windowed['Pearson_corr']     = list_pearson_corr
+        Outcome_dic_windowed['Pearson_pval']     = list_pearson_pval
+        Outcome_dic_windowed['Spearman_corr']    = list_spearman_corr
+        Outcome_dic_windowed['Spearman_pval']    = list_spearman_pval
+        Outcome_dic_windowed['lags']             = list_lags
+        Outcome_dic_windowed['signal1_windowed'] = signal1_dic_windowed
+        Outcome_dic_windowed['signal2_windowed'] = signal2_dic_windowed
+
+        return Outcome_dic_windowed
+            
+            
+            

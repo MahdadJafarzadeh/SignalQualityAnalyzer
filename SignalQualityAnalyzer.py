@@ -68,8 +68,9 @@ f_psd_zmax_dic = dict()
 
 #%% Main loop of analysis
 #####======================== Iterating through subjs=====================#####
+subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_15/P15 night3_B.02.12.2018/P15_night3_B_Markers_(1).edf"]
 for idx, c_subj in enumerate(subj_ids_somno):
-
+    idx = 5
     # define the current zmax data
     curr_zmax  = subj_ids_zmax[idx]
     
@@ -138,7 +139,24 @@ for idx, c_subj in enumerate(subj_ids_somno):
         
     full_sig_somno_before_sync = Somno_reqChannel
     full_sig_zmax_before_sync  = zmax_data_R
-    Object.plot_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
+    
+    # Get final sigs and plot them
+    zmax_final, somno_final = Object.plot_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
                                  lag, full_sig_somno_before_sync,
                                  full_sig_zmax_before_sync)
-        
+    
+    # =================== Compute correlations win by win =================== #
+    Output_dic = Object.win_by_win_corr(sig1 = zmax_final, sig2 = somno_final,\
+                                    fs = fs_res, win_size = 30, plot_synced_winodws = False)
+    
+    # =================== Plot spectrgoram of somno vs Zmax ================= #
+    f_spect_s, f_spect_z, Sxx_s, Sxx_z = Object.spectrogram_creation(somno_final, zmax_final, fs_res,\
+                                         save_name="spect_"+subj_night[idx], save_fig = False, dpi = 1000,\
+                                         save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis")
+    
+    # ========================= Plot coherence ============================== #
+    coh, f = Object.plot_coherence(somno_final, zmax_final, Fs = fs_res, NFFT = 256)
+    
+    # ============================== Plot psd =============================== #
+    psd_s1, f_psd_s1, psd_s2, f_psd_s2 = Object.plot_psd(sig1 = zmax_final,\
+                                sig2 = somno_final, fs = fs_res, NFFT = 2**11)
