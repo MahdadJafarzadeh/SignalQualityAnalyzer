@@ -459,6 +459,13 @@ class SigQual:
         with open(path+fname+'.pickle',"wb") as f:
             pickle.dump(dic, f)
             
+    #%% Load pickle files to access features and labels     
+    def load_dictionary(self, path, fname):
+        import pickle
+        with open(path + fname + '.pickle', "rb") as f: 
+            dic = pickle.load(f)
+            
+        return dic   
     #%% Window by window cross correlation
     def win_by_win_corr(self, sig1, sig2, fs, win_size = 30, plot_synced_winodws = False):
         
@@ -578,7 +585,7 @@ class SigQual:
             
         return measure_all_subjs
     #%% Plot boxplot of data
-    def plot_boxplot(self, data, Xlabels, showmeans= True):
+    def plot_boxplot(self, data, Xlabels, Title, showmeans= True):
         
         fig, ax = plt.subplots()
         
@@ -607,9 +614,36 @@ class SigQual:
         ax.boxplot(data, showmeans = showmeans, meanprops=red_square)
         
         # title and onther info
-        plt.title("Boxplot of subjective epoch-wise pearson correlation "+
-                 "between Zmax EEG R and Somno F4:A1", size= 14)
+        plt.title("Boxplot of subjective epoch-wise "+ Title + 
+                 " between Zmax EEG R and Somno F4:A1", size= 14)
     
+    #%% Quanifying a metric
+    def quanitifying_metric(self, subj_night, data_metric, metric_title):
+        
+        # init array for overall result
+        overall_val = []
+        
+        for i,subj in enumerate(subj_night):
+            
+            # take the current row of the metric array
+            tmp_metric_val = data_metric[i]
+            
+            # Current mean and std 
+            curr_mean = np.mean(tmp_metric_val) * 100
+            curr_std  = np.std(tmp_metric_val)  * 100
+            
+            # Concatenate to compute overall val
+            overall_val    = np.concatenate((overall_val, tmp_metric_val))
+            
+            # Print current mean and std of subject
+            print(f'The mean and std of {metric_title} for {subj} is: {"{:.2f}".format(curr_mean)} +- {"{:.2f}".format(curr_std)} ')
+            
+            del curr_mean, curr_std, tmp_metric_val
+        
+        # print overall outcome
+        overall_mean = np.mean(overall_val) * 100
+        overall_std  = np.std(overall_val)  * 100
+        print(f'The overall mean and std of {metric_title} is: {"{:.2f}".format(overall_mean)} +- {"{:.2f}".format(overall_std)} ')   
         
                     
                     

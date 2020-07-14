@@ -163,14 +163,31 @@ for idx, c_subj in enumerate(subj_ids_somno):
     # ============================== Plot psd =============================== #
     psd_s1, f_psd_s1, psd_s2, f_psd_s2 = Object.plot_psd(sig1 = zmax_final,\
                                 sig2 = somno_final, fs = fs_res, NFFT = 2**11)
-        
+
+#%% Save outcomes        
 # ============================= save results ================================ #
 Object.save_dictionary( "F:/Zmax_Data/Results/SignalQualityAnalysis/",\
                        "subjective_corr_results_140720", subjective_corr_dic)
+
+#%% Load corr_outcomes
+# =========================== Load windowed corrs =========================== #
+subjective_corr_dic = Object.load_dictionary( "F:/Zmax_Data/features/",\
+                       "subjective_corr_results_140720")
     
+#%% Get overall corr
 # ======================== Retrieve overall metrics ========================= #
-Overall_pearson_corr = Object.get_overall_measure(subjective_corr_dic,\
+Overall_pearson_corr  = Object.get_overall_measure(subjective_corr_dic,\
                                                   subj_night, measure = "Pearson_corr")
     
+Overall_spearman_corr = Object.get_overall_measure(subjective_corr_dic,\
+                                                  subj_night, measure = "Spearman_corr")
     
-Object.plot_boxplot(Overall_pearson_corr, Xlabels = subj_night, showmeans= True)
+#%% Boxplot     
+Object.plot_boxplot(Overall_pearson_corr, Xlabels = subj_night, showmeans= True,\
+                    Title = "Pearson correlation")
+
+Object.plot_boxplot(Overall_spearman_corr, Xlabels = subj_night, showmeans= True,\
+                    Title = "Spearman correlation")
+    
+#%% Quantifying some metrics
+Object.quanitifying_metric(subj_night, Overall_spearman_corr, metric_title = "spearman corr")
