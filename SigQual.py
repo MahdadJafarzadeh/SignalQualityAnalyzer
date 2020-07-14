@@ -286,11 +286,11 @@ class SigQual:
         
         return spearman_corr,pval
      
-    #%% Plotting COMPLETE signals after synchronization
+    #%% Create COMPLETE signals after synchronization
     
-    def plot_full_sig_after_sync(self, LRLR_start_somno, LRLR_start_zmax, fs_res,
+    def create_full_sig_after_sync(self, LRLR_start_somno, LRLR_start_zmax, fs_res,
                                  lag, full_sig_somno_before_sync,
-                                 full_sig_zmax_before_sync):
+                                 full_sig_zmax_before_sync, plot_full_sig = False):
         
         # rough lag 
         rough_lag = (LRLR_start_somno - LRLR_start_zmax) * fs_res
@@ -317,14 +317,15 @@ class SigQual:
         common_length = np.min([len_s, len_z])  
         
         # Plot truncated sigs
-        plt.figure()
-        plt.plot(np.arange(0, common_length) / fs_res / 60, zmax_final, color = 'blue', label = 'Zmax R EEG')
-        plt.plot(np.arange(0, common_length) / fs_res / 60, somno_final, \
-                 color = 'red', label = 'Somno F4-A1')
-        plt.title('Complete Zmax and Somno data after full sync', size = 20)
-        plt.xlabel('Time (mins)', size = 15)
-        plt.ylabel('Amplitude (v)', size = 15)
-        plt.legend(prop={"size":20}, loc = "upper right") 
+        if plot_full_sig == True:
+            plt.figure()
+            plt.plot(np.arange(0, common_length) / fs_res / 60, zmax_final, color = 'blue', label = 'Zmax R EEG')
+            plt.plot(np.arange(0, common_length) / fs_res / 60, somno_final, \
+                     color = 'red', label = 'Somno F4-A1')
+            plt.title('Complete Zmax and Somno data after full sync', size = 20)
+            plt.xlabel('Time (mins)', size = 15)
+            plt.ylabel('Amplitude (v)', size = 15)
+            plt.legend(prop={"size":20}, loc = "upper right") 
         
         return zmax_final, somno_final
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Plot section ~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -453,10 +454,10 @@ class SigQual:
         return psd_s1, f_psd_s1, psd_s2, f_psd_s2
 
     #%% save_dic
-    def save_dictionary(self, path, fname, labels_dic, features_dic):
+    def save_dictionary(self, path, fname, dic):
         import pickle        
         with open(path+fname+'.pickle',"wb") as f:
-            pickle.dump([features_dic, labels_dic], f)
+            pickle.dump(dic, f)
             
     #%% Window by window cross correlation
     def win_by_win_corr(self, sig1, sig2, fs, win_size = 30, plot_synced_winodws = False):
@@ -554,6 +555,61 @@ class SigQual:
         Outcome_dic_windowed['signal2_windowed'] = signal2_dic_windowed
 
         return Outcome_dic_windowed
+        
+    #%% Get overall measures
+    def get_overall_measure(self, subjective_corr_dic, subj_night, measure = "Pearson_corr"):
+        
+        # Init an array to append all the measure over subjects
+        measure_all_subjs = []
+        
+        # Iterate over subjects to retrieve the required measure
+        for subj in subj_night:
             
+            # find a subject
+            tmp_subj    = subjective_corr_dic[subj]
             
+            # Take corresponding measure
+            tmp_measure = tmp_subj[measure]
             
+            # Append therequried measure to the array
+            measure_all_subjs.append(tmp_measure)
+            
+            del tmp_subj, tmp_measure 
+            
+        return measure_all_subjs
+    #%% Plot boxplot of data
+    def plot_boxplot(self, data, Xlabels, showmeans= True):
+        
+        fig, ax = plt.subplots()
+        
+        # positioniong labels
+        fig.canvas.draw()
+        
+        # Define labels 
+        labels = [item.get_text() for item in ax.get_xticklabels()]
+        
+        # Check if the user wants to plot overall as well
+        
+        labels      = np.append(Xlabels, "Overall")
+        
+        overall_val = []
+        for i in np.arange(len(data)):
+            overall_val = np.concatenate((overall_val, data[i]))
+            
+        data.append(overall_val.tolist())
+            
+        # Set labels
+        ax.set_xticklabels(labels, rotation=45, size = 15)
+        
+        # Boxplot
+        red_square = dict(markerfacecolor='r', marker='s')
+        
+        ax.boxplot(data, showmeans = showmeans, meanprops=red_square)
+        
+        # title and onther info
+        plt.title("Boxplot of subjective epoch-wise pearson correlation "+
+                 "between Zmax EEG R and Somno F4:A1", size= 14)
+    
+        
+                    
+                    

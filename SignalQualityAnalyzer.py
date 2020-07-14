@@ -57,20 +57,21 @@ event_markers = Object.read_excel(main_path = sync_markers_main_path, filename =
 
 
 #%% initializing dictionaries to save output
-Sxx_somno_dic = dict()
-Sxx_zmax_dic = dict()
-f_spect_somno_dic = dict()
-f_spect_zmax_dic = dict()
-psd_somno_dic = dict()
-psd_zmax_dic = dict()
-f_psd_somno_dic = dict()
-f_psd_zmax_dic = dict()
+Sxx_somno_dic       = dict()
+Sxx_zmax_dic        = dict()
+f_spect_somno_dic   = dict()
+f_spect_zmax_dic    = dict()
+psd_somno_dic       = dict()
+psd_zmax_dic        = dict()
+f_psd_somno_dic     = dict()
+f_psd_zmax_dic      = dict()
+subjective_corr_dic = dict()
 
 #%% Main loop of analysis
 #####======================== Iterating through subjs=====================#####
-subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_15/P15 night3_B.02.12.2018/P15_night3_B_Markers_(1).edf"]
+#subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_21/P_21 night2_UB.15.01.2019/P_21_night2_UB_Recording_(2)_(1).edf"]
 for idx, c_subj in enumerate(subj_ids_somno):
-    idx = 5
+    
     # define the current zmax data
     curr_zmax  = subj_ids_zmax[idx]
     
@@ -133,7 +134,7 @@ for idx, c_subj in enumerate(subj_ids_somno):
                   save_dir = "F:/Zmax_Data/Results/SignalQualityAnalysis/",
                   report_pearson_corr_during_sync  = True,\
                   report_spearman_corr_during_sync = True,\
-                  plot_cross_corr_lag = True)
+                  plot_cross_corr_lag = False)
         
     # ======================= Plot full sig after sync ====================== #
         
@@ -141,13 +142,15 @@ for idx, c_subj in enumerate(subj_ids_somno):
     full_sig_zmax_before_sync  = zmax_data_R
     
     # Get final sigs and plot them
-    zmax_final, somno_final = Object.plot_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
+    zmax_final, somno_final = Object.create_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
                                  lag, full_sig_somno_before_sync,
-                                 full_sig_zmax_before_sync)
+                                 full_sig_zmax_before_sync, plot_full_sig = False)
     
     # =================== Compute correlations win by win =================== #
     Output_dic = Object.win_by_win_corr(sig1 = zmax_final, sig2 = somno_final,\
                                     fs = fs_res, win_size = 30, plot_synced_winodws = False)
+    # save it subjectively
+    subjective_corr_dic[subj_night[idx]] = Output_dic
     
     # =================== Plot spectrgoram of somno vs Zmax ================= #
     f_spect_s, f_spect_z, Sxx_s, Sxx_z = Object.spectrogram_creation(somno_final, zmax_final, fs_res,\
@@ -160,3 +163,14 @@ for idx, c_subj in enumerate(subj_ids_somno):
     # ============================== Plot psd =============================== #
     psd_s1, f_psd_s1, psd_s2, f_psd_s2 = Object.plot_psd(sig1 = zmax_final,\
                                 sig2 = somno_final, fs = fs_res, NFFT = 2**11)
+        
+# ============================= save results ================================ #
+Object.save_dictionary( "F:/Zmax_Data/Results/SignalQualityAnalysis/",\
+                       "subjective_corr_results_140720", subjective_corr_dic)
+    
+# ======================== Retrieve overall metrics ========================= #
+Overall_pearson_corr = Object.get_overall_measure(subjective_corr_dic,\
+                                                  subj_night, measure = "Pearson_corr")
+    
+    
+Object.plot_boxplot(Overall_pearson_corr, Xlabels = subj_night, showmeans= True)
