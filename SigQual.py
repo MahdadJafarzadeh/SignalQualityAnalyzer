@@ -23,7 +23,14 @@ class SigQual:
     #%% Read text
     def read_txt(self,main_path, file_name, dtype = 'str',delimiter='\n'):
         from numpy import loadtxt
-        output_file = loadtxt(main_path + file_name + ".txt", dtype = dtype, delimiter = delimiter)
+        
+        # Check if the input has the ".txt"
+        if (main_path + file_name)[-4:] =='.txt':   
+            output_file = loadtxt(main_path + file_name         , dtype = dtype, delimiter = delimiter)
+       
+        # Otherwise
+        else: 
+            output_file = loadtxt(main_path + file_name + ".txt", dtype = dtype, delimiter = delimiter)
         
         return output_file
     #%% Read Excel file
@@ -92,9 +99,9 @@ class SigQual:
         return y
     #%% mne object filter
     
-    def mne_obj_filter(self, data, sfreq, l_freq, h_freq, picks):
+    def mne_obj_filter(self, data, l_freq, h_freq):
         
-        filtered_sig = mne.filter.filter_data(data, sfreq, l_freq, h_freq, picks)
+        filtered_sig = data.filter(l_freq=l_freq, h_freq=h_freq)
         
         return filtered_sig
         
@@ -208,16 +215,18 @@ class SigQual:
                          dpi=dpi, saving_format = '.png',
                          full_screen = False)
             
+        # Retrieving synced signals
+        sig1 = Somno_reqChannel[somno_plotting_samples-lag]
+        sig2 = sig_zmax
+        
         # Report Pearson correlations during sync period
         if report_pearson_corr_during_sync == True:
-            sig1 = Somno_reqChannel[somno_plotting_samples-lag]
-            sig2 = sig_zmax
+            
             self.pearson_corr(sig1, sig2)
         
         # Report spearman correlations during sync period
         if report_spearman_corr_during_sync == True:
-            sig1 = Somno_reqChannel[somno_plotting_samples-lag]
-            sig2 = sig_zmax
+
             self.spearman_corr(sig1, sig2)
         
         # Plot the cross-corr by which the lag was found
@@ -249,7 +258,7 @@ class SigQual:
             plt.ylabel('Amplitude', size = 15)
             plt.show()
             
-        return lag, corr, Somno_reqChannel, zmax_data_R
+        return lag, corr, Somno_reqChannel, zmax_data_R, sig1, sig2
             
     #%% Pearson correlation
             
@@ -491,6 +500,8 @@ class SigQual:
         signal1_dic_windowed = dict()
         signal2_dic_windowed = dict()
         Outcome_dic_windowed = dict()
+        f_coherence          = dict()
+        overall_Cxy          = np.empty((0, 129))
         
         # e.g. Sig1 : Zmax , Sig2 : Somno
         win_size    = win_size #secs
@@ -526,6 +537,18 @@ class SigQual:
             # Compute Spearman corr of the current win
             spea_corr, spea_pval = self.spearman_corr(curr_sig1, curr_sig2_synced, abs_value = True, print_results = False)
             
+# =============================================================================
+#             # Compute coherence
+#             for i in np.arange(0,6):
+#                 i = int(i*5)
+#                 # Lower boundary is i and higher boundary is (i+1)
+#                 curr_sig1_5sec = curr_sig1[i * fs: (i+5)*fs]
+#                 curr_sig2_5sec = curr_sig2_synced[i * fs: (i+5)*fs]
+#                 # Dompute coherence
+#                 f, Cxy      = signal.coherence(curr_sig1_5sec, curr_sig2_5sec, fs = fs)
+#                 overall_Cxy = np.row_stack((overall_Cxy, Cxy))
+# =============================================================================
+            
             # Concatenate the values of pearson and spearman corr per window
             list_pearson_corr.append(pear_corr)
             list_pearson_pval.append(pear_pval)
@@ -560,9 +583,138 @@ class SigQual:
         Outcome_dic_windowed['lags']             = list_lags
         Outcome_dic_windowed['signal1_windowed'] = signal1_dic_windowed
         Outcome_dic_windowed['signal2_windowed'] = signal2_dic_windowed
+        Outcome_dic_windowed['Coherence']        = overall_Cxy
 
         return Outcome_dic_windowed
+    
+    #%% Compute coherence per synced window    
+    def coherence_per_sleep_stage(self, subjective_corr_dic, subj_hyps,subj_night):
         
+        # Init
+        coherence_per_stage            = dict()
+        Coherence_subjective_per_stage = dict()
+        
+        # Iterate over subjects
+        for i,subj in enumerate(subj_night):
+            
+            # Init dicts (Wake, N1, N2, SWS, REM)
+            coherecne_W   = np.empty((0, 129))
+            coherecne_N1  = np.empty((0, 129))
+            coherecne_N2  = np.empty((0, 129))
+            coherecne_SWS = np.empty((0, 129))
+            coherecne_REM = np.empty((0, 129))
+            coherence_per_stage_tmp        = dict()
+            
+            # Pick the array of Coherence of current subject
+            sig1_values = subjective_corr_dic[subj]['signal1_windowed']
+            sig2_values = subjective_corr_dic[subj]['signal2_windowed']
+            
+            # Pick the address of current hyp
+            tmp_hyp_adr = subj_hyps[i]
+            
+            # read current hypnogram
+            curr_hyp = self.read_txt(main_path = tmp_hyp_adr, file_name = "",\
+                                  dtype = None,delimiter=None) 
+            
+            # First ensure that hyp and Coh arrays have the same length
+            #self.Ensure_data_label_length(curr_subj_coherence, curr_hyp)
+            
+            # Separate windows per sleep stage
+            Wake_idx = [ii for ii,j in enumerate(curr_hyp[:,0]) if (j == 0) ]
+            N1_idx   = [ii for ii,j in enumerate(curr_hyp[:,0]) if (j == 1) ]
+            N2_idx   = [ii for ii,j in enumerate(curr_hyp[:,0]) if (j == 2) ]
+            N3_idx   = [ii for ii,j in enumerate(curr_hyp[:,0]) if (j == 3) ]
+            REM_idx  = [ii for ii,j in enumerate(curr_hyp[:,0]) if (j == 5) ]
+            
+            # Coherence of 5 sec windows per sleep stage
+            
+            # Wake
+            coherence_w_tmp = self.short_window_coherence_per_sleep_stage(Wake_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs = 256)
+                
+            # N1
+            coherence_N1_tmp = self.short_window_coherence_per_sleep_stage(N1_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs = 256)
+
+
+            # N2
+            coherence_N2_tmp = self.short_window_coherence_per_sleep_stage(N2_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs = 256)
+
+
+            # SWS
+            coherence_SWS_tmp = self.short_window_coherence_per_sleep_stage(N3_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs = 256)
+
+
+            # REM
+            coherence_REM_tmp = self.short_window_coherence_per_sleep_stage(REM_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs = 256)
+
+        	# Concatenate stages per subject to find overall subjects
+            coherecne_W   = np.row_stack((coherecne_W, coherence_w_tmp))
+            coherecne_N1  = np.row_stack((coherecne_N1, coherence_N1_tmp))
+            coherecne_N2  = np.row_stack((coherecne_N2, coherence_N2_tmp))
+            coherecne_SWS = np.row_stack((coherecne_SWS, coherence_SWS_tmp))
+            coherecne_REM = np.row_stack((coherecne_REM, coherence_REM_tmp))
+            
+            # subjective per-stage arrays in a dic
+            coherence_per_stage_tmp["Coherence_W"]   = coherence_w_tmp
+            coherence_per_stage_tmp["Coherence_N1"]  = coherence_N1_tmp
+            coherence_per_stage_tmp["Coherence_N2"]  = coherence_N2_tmp
+            coherence_per_stage_tmp["Coherence_SWS"] = coherence_SWS_tmp
+            coherence_per_stage_tmp["Coherence_REM"] = coherence_REM_tmp
+            
+            # Keep all stages in a subjective dic
+            Coherence_subjective_per_stage[subj] = coherence_per_stage_tmp
+            
+            
+        # Keep per-stage arrays in a dic
+# =============================================================================
+#         coherence_per_stage["Coherence_W"]   = coherecne_W
+#         coherence_per_stage["Coherence_N1"]  = coherecne_N1
+#         coherence_per_stage["Coherence_N2"]  = coherecne_N2
+#         coherence_per_stage["Coherence_SWS"] = coherecne_SWS
+#         coherence_per_stage["Coherence_REM"] = coherecne_REM
+# =============================================================================
+        
+        return Coherence_subjective_per_stage
+    #%% short window coherence computation
+    def short_window_coherence_per_sleep_stage(self, stage_idx,\
+                                               sig1_values, sig2_values,\
+                                               subjective_corr_dic, fs=256):
+        
+        # init 
+        overall_Cxy          = np.empty((0, 129))
+        
+        # Take the corresponding windows of each sleep stage
+        for k in stage_idx:
+            
+            curr_win_no = 'window' + str(k)
+            sig1_curr_epoch = sig1_values[curr_win_no]
+            sig2_curr_epoch = sig2_values[curr_win_no]
+        
+            # Go 5 second by 5 second within the current epoch (30s)
+            for jj in np.arange(0,6):
+                
+                # 5 second time-window
+                jj = int(jj*5)
+                
+                # Lower boundary is i and higher boundary is (i+1)
+                curr_sig1_5sec = sig1_curr_epoch[jj * fs: (jj+5)*fs]
+                curr_sig2_5sec = sig2_curr_epoch[jj * fs: (jj+5)*fs]
+                
+                # Dompute coherence
+                f, Cxy      = signal.coherence(curr_sig1_5sec, curr_sig2_5sec, fs = fs)
+                overall_Cxy = np.row_stack((overall_Cxy, Cxy))
+                
+        return overall_Cxy
+            
     #%% Get overall measures
     def get_overall_measure(self, subjective_corr_dic, subj_night, measure = "Pearson_corr"):
         
@@ -645,5 +797,220 @@ class SigQual:
         overall_std  = np.std(overall_val)  * 100
         print(f'The overall mean and std of {metric_title} is: {"{:.2f}".format(overall_mean)} +- {"{:.2f}".format(overall_std)} ')   
         
-                    
-                    
+    #%% ensure train data and labels have the same length
+    def Ensure_data_label_length(self, X, y):
+        len_x, len_y = np.shape(X)[0], np.shape(y)[0]
+        if len_x == len_y:
+            print("Length of data and hypnogram are identical! Perfect!")
+        else:
+            raise ValueError("Lengths of data epochs and hypnogram labels are different!!!")
+            
+    #%% Plot coherence per sleep stage
+    def plot_coherence_per_sleep_stage(self, subj_night, Coherence_subjective_per_stage,\
+                                       plot_all_subj_all_stage = True,\
+                                       plot_mean_per_stage = True,\
+                                       freq_range= "all",
+                                       print_resutls = True):
+        
+        # Init arrays to plot
+        coh_W_all   = np.empty((0,129))
+        coh_N1_all  = np.empty((0,129))
+        coh_N2_all  = np.empty((0,129))
+        coh_SWS_all = np.empty((0,129))
+        coh_REM_all = np.empty((0,129))
+        
+        # Assign a shorter name
+        coh = Coherence_subjective_per_stage
+        
+        for i,subj in enumerate(subj_night):
+            
+            # Take the current subject coherence
+            curr_coh = coh[subj]
+            
+            # Concatenate coherence per sleep stage
+            coh_W_all   = np.row_stack((coh_W_all, curr_coh["Coherence_W"]))
+            coh_N1_all  = np.row_stack((coh_N1_all, curr_coh["Coherence_N1"]))
+            coh_N2_all  = np.row_stack((coh_N2_all, curr_coh["Coherence_N2"]))
+            coh_SWS_all = np.row_stack((coh_SWS_all, curr_coh["Coherence_SWS"]))
+            coh_REM_all = np.row_stack((coh_REM_all, curr_coh["Coherence_REM"]))
+            
+            del curr_coh
+        
+        # Compute overall coherence (independent of sleep stage)
+        coh_full = np.row_stack((coh_W_all,coh_N1_all))
+        coh_full = np.row_stack((coh_full,coh_N2_all))
+        coh_full = np.row_stack((coh_full, coh_SWS_all))
+        coh_full = np.row_stack((coh_full, coh_REM_all))
+        
+        # Compute mean per stage
+        mean_w  = np.mean(coh_W_all, axis = 0)
+        std_w   = np.std(coh_W_all, axis = 0)
+        
+        mean_n1 = np.mean(coh_N1_all, axis = 0)
+        std_n1  = np.std(coh_N1_all, axis = 0)
+        
+        mean_n2 = np.mean(coh_N2_all, axis = 0)
+        std_n2  = np.std(coh_N2_all, axis = 0)
+        
+        mean_sws = np.mean(coh_SWS_all, axis = 0)
+        std_sws  = np.std(coh_SWS_all, axis = 0)
+        
+        mean_rem = np.mean(coh_REM_all, axis = 0)
+        std_rem  = np.std(coh_REM_all, axis = 0)
+        
+        mean_full = np.mean(coh_full, axis = 0)
+        std_full  = np.std(coh_full, axis = 0) 
+            
+        # Define frequency range
+        f = np.arange(0,129)
+        
+        # Which freq range to show?
+        if freq_range == "Delta":
+            Lim = [0, 4]
+            
+        elif freq_range == "Theta":
+            Lim = [4, 8]
+            
+        elif freq_range == "Alpha":
+            Lim = [8, 12]
+            
+        elif freq_range == "Beta":
+            Lim = [12, 30]
+            
+        elif freq_range == "Sleep":
+            Lim = [0, 30]
+        else:
+            Lim = [0, 128]
+        
+        # ====================== Print per-stage results ==================== #
+        # Range
+        range_  = np.arange(Lim[0], Lim[1]+1)
+        
+        # Means
+        meanW    = np.mean(mean_w[range_])*100
+        meanN1   = np.mean(mean_n1[range_])*100
+        meanN2   = np.mean(mean_n2[range_])*100
+        meanSWS  = np.mean(mean_sws[range_])*100
+        meanREM  = np.mean(mean_rem[range_])*100
+        meanFull = np.mean(mean_full[range_])*100
+        
+        # Std
+        stdW    = np.std(mean_w[range_])*100
+        stdN1   = np.std(mean_n1[range_])*100
+        stdN2   = np.std(mean_n2[range_])*100
+        stdSWS  = np.std(mean_sws[range_])*100
+        stdREM  = np.std(mean_rem[range_])*100
+        stdFull = np.std(mean_full[range_])*100
+        
+        if print_resutls == True:
+            print(f'Frequency range is chosen as: {freq_range} ({Lim})' )
+            print(f'Coherence over all subjects - Wake: {"{:.2f}".format(meanW)} +- {"{:.2f}".format(stdW)}')
+            print(f'Coherence over all subjects - N1: {"{:.2f}".format(meanN1)} +- {"{:.2f}".format(stdN1)}')
+            print(f'Coherence over all subjects - N2: {"{:.2f}".format(meanN2)} +- {"{:.2f}".format(stdN2)}')
+            print(f'Coherence over all subjects - SWS: {"{:.2f}".format(meanSWS)} +- {"{:.2f}".format(stdSWS)}')
+            print(f'Coherence over all subjects - REM: {"{:.2f}".format(meanREM)} +- {"{:.2f}".format(stdREM)}')
+            print(f'Coherence over all subjects - Overall: {"{:.2f}".format(meanFull)} +- {"{:.2f}".format(stdFull)}')
+        # =================== Plot Coherence during awake =================== #
+        
+        if plot_all_subj_all_stage == True:
+            
+            fig, ax = plt.subplots(5,1, figsize=(20, 10))
+            
+            # Wake
+            plt.axes(ax[0])
+            plt.plot(f, np.transpose(coh_W_all))
+            plt.xlim(Lim)
+            plt.title("Coherence - all subjects - Wake", size =14)
+            plt.ylabel("Coherence",size = 15)
+            
+            # N1
+            plt.axes(ax[1])
+            plt.plot(f, np.transpose(coh_N1_all))
+            plt.xlim(Lim)
+            plt.title("Coherence - all subjects - N1",size =14)
+            plt.ylabel("Coherence",size = 15)
+            
+            # N2
+            plt.axes(ax[2])
+            plt.plot(f, np.transpose(coh_N2_all))
+            plt.xlim(Lim)
+            plt.title("Coherence - all subjects - N2", size =14)
+            plt.ylabel("Coherence",size = 15)
+            
+            # SWS
+            plt.axes(ax[3])
+            plt.plot(f, np.transpose(coh_SWS_all))
+            plt.xlim(Lim)
+            plt.title("Coherence - all subjects - SWS",size =14)
+            plt.ylabel("Coherence",size = 15)
+            
+            # REM
+            plt.axes(ax[4])
+            plt.plot(f, np.transpose(coh_REM_all))
+            plt.xlim(Lim)
+            plt.title("Coherence - all subjects - REM",size =14)
+            plt.xlabel("Frequency (Hz)", size = 15)
+            plt.ylabel("Coherence",size = 15)
+            
+        # ======================= plot mean per stage ======================= #
+        # Plot all epochs at once (per stage)
+        if plot_mean_per_stage == True:
+            
+            fig, ax = plt.subplots(4,1, figsize=(20, 10))
+            # N1
+            plt.axes(ax[0])
+            plt.plot(f, mean_n1,  color = 'blue',    label = 'N1' , linewidth = 3)
+            plt.fill_between(f, mean_n1 - std_n1, mean_n1 + std_n1, alpha=0.2, color = 'blue')
+            plt.xlim(Lim)
+            plt.title('Averaged coherence of all subjects N1 - Freq bin: ' + freq_range,size = 14)
+            plt.ylabel("Coherence",size = 15)
+            # N2
+            plt.axes(ax[1])
+            plt.plot(f, mean_n2,  color = 'red',     label = 'N2', linewidth = 3)
+            plt.fill_between(f, mean_n2 - std_n2, mean_n2 + std_n2, alpha=0.2, color = 'red')
+            plt.xlim(Lim)
+            plt.title('Averaged coherence of all subjects N2 - Freq bin: ' + freq_range,size = 14)
+            plt.ylabel("Coherence",size = 15)
+            # SWS
+            plt.axes(ax[2])
+            plt.plot(f, mean_sws, color = 'green',   label = 'SWS', linewidth = 3)
+            plt.fill_between(f, mean_sws - std_sws, mean_sws + std_sws, alpha=0.2,color = 'green')
+            plt.xlim(Lim)
+            plt.title('Averaged coherence of all subjects SWS - Freq bin: ' + freq_range,size = 14)
+            plt.ylabel("Coherence",size = 15)
+            # REM
+            plt.axes(ax[3])
+            plt.plot(f, mean_rem, color = 'cyan', label = 'REM', linewidth = 3)
+            plt.fill_between(f, mean_rem - std_rem, mean_rem + std_rem, alpha=0.2,color = 'cyan')
+            plt.title('Averaged coherence of all subjects REM - Freq bin: ' + freq_range,size = 14)
+            plt.xlabel("Frequency (Hz)", size = 15)
+            plt.ylabel("Coherence",size = 15)
+            plt.xlim(Lim)
+            ########## Plot all together
+# =============================================================================
+#             plt.axes(ax[4])
+#             # W
+#             plt.plot(f, mean_w,   color = 'black',   label = 'Wake', linewidth = 3)
+#             plt.fill_between(f, mean_w - std_w, mean_w + std_w, alpha=0.2,color = 'black')
+#             # N1
+#             plt.plot(f, mean_n1,  color = 'blue',    label = 'N1' , linewidth = 3)
+#             plt.fill_between(f, mean_n1 - std_n1, mean_n1 + std_n1, alpha=0.2, color = 'blue')
+#             # N2
+#             plt.plot(f, mean_n2,  color = 'red',     label = 'N2', linewidth = 3)
+#             plt.fill_between(f, mean_n2 - std_n2, mean_n2 + std_n2, alpha=0.2, color = 'red')
+#             # SWS
+#             plt.plot(f, mean_sws, color = 'green',   label = 'SWS', linewidth = 3)
+#             plt.fill_between(f, mean_sws - std_sws, mean_sws + std_sws, alpha=0.2,color = 'green')
+#             # REM
+#             plt.plot(f, mean_rem, color = 'cyan', label = 'REM', linewidth = 3)
+#             plt.fill_between(f, mean_rem - std_rem, mean_rem + std_rem, alpha=0.2,color = 'cyan')
+#             plt.xlim([0,30])
+#             plt.legend(prop={"size":20})
+#             plt.ylim([0,1])
+#             
+# =============================================================================
+            
+            
+                
+                
+                

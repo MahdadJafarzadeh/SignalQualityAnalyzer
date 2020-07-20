@@ -36,8 +36,8 @@ Object = SigQual()
 #####=========================== Reading data ============================#####
 
 # Main path
-main_path   = "F:/Zmax_Data/features/"
-
+main_path       = "F:/Zmax_Data/features/"
+ 
 # Read location of Somno data
 subj_ids_somno  = Object.read_txt(main_path = main_path, file_name =  "SigQual_Somno_data_loc",\
                                   dtype = 'str',delimiter='\n') 
@@ -48,14 +48,16 @@ subj_ids_zmax   =  Object.read_txt(main_path = main_path, file_name =  "SigQual_
 
 
 # Read subject_night id
-subj_night   = Object.read_txt(main_path = main_path, file_name =  "Subject_Night",\
+subj_night      = Object.read_txt(main_path = main_path, file_name =  "Subject_Night",\
                                   dtype = 'str',delimiter='\n') 
 
 # read event markers path to sync data
 sync_markers_main_path = "F:/Zmax_Data/features/"
 event_markers = Object.read_excel(main_path = sync_markers_main_path, filename = "Sync_periods")
 
-
+# Read Hypnograms
+subj_hyps     = Object.read_txt(main_path = main_path, file_name =  "Subject_Hyps",\
+                                  dtype = 'str',delimiter='\n') 
 #%% initializing dictionaries to save output
 Sxx_somno_dic       = dict()
 Sxx_zmax_dic        = dict()
@@ -69,7 +71,7 @@ subjective_corr_dic = dict()
 
 #%% Main loop of analysis
 #####======================== Iterating through subjs=====================#####
-#subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_21/P_21 night2_UB.15.01.2019/P_21_night2_UB_Recording_(2)_(1).edf"]
+subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_12/P12 night2_B.25.11.2018/P12_night2_B_markers_(1).edf"]
 for idx, c_subj in enumerate(subj_ids_somno):
     
     # define the current zmax data
@@ -100,8 +102,13 @@ for idx, c_subj in enumerate(subj_ids_somno):
 # =============================================================================
     
     # ======================= Filter data before resample =================== #
-    #Data_R_filt = Object.mne_obj_filter(data = data_R, sfreq = fs_zmax, l_freq = .1, h_freq=30, picks = AvailableChannels_z)
     
+# =============================================================================
+#     data_R_filt    = Object.mne_obj_filter(data = data_R, l_freq = .1, h_freq=30)
+#     data_L_filt    = Object.mne_obj_filter(data = data_L, l_freq = .1, h_freq=30)
+#     EEG_somno_filt = Object.mne_obj_filter(data = EEG_somno, l_freq = .1, h_freq=30)
+#     
+# =============================================================================
     # ======================= Resampling to lower freq ====================== #
      
     fs_res, data_R, EEG_somno = Object.resample_data(data_R, EEG_somno, fs_zmax, fs_somno)
@@ -117,7 +124,12 @@ for idx, c_subj in enumerate(subj_ids_somno):
     data_L_resampled_filtered    = Object.butter_bandpass_filter(data_L_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
     data_R_resampled_filtered    = Object.butter_bandpass_filter(data_R_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
     EEG_somno_resampled_filtered = Object.butter_bandpass_filter(data_somno_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
-
+    
+# =============================================================================
+#     data_L_resampled_filtered = data_L_get
+#     data_R_resampled_filtered = data_R_get
+#     EEG_somno_resampled_filtered = data_somno_get
+# =============================================================================
     # ====================== Synchronization of data ======================== #
     
     # required inputs to sync
@@ -127,7 +139,7 @@ for idx, c_subj in enumerate(subj_ids_somno):
     LRLR_end_somno   = event_markers['LRLR_end_somno'][idx] #sec
     
     # sync
-    lag, corr, Somno_reqChannel, zmax_data_R = Object.sync_data(fs_res, LRLR_start_zmax, LRLR_end_zmax, LRLR_start_somno, LRLR_end_somno,\
+    lag, corr, Somno_reqChannel, zmax_data_R, sig1, sig2 = Object.sync_data(fs_res, LRLR_start_zmax, LRLR_end_zmax, LRLR_start_somno, LRLR_end_somno,\
                   data_R_resampled_filtered, data_L_resampled_filtered, \
                   EEG_somno_resampled_filtered, AvailableChannels_s, save_name = subj_night[idx], \
                   RequiredChannels = ['F4:A1'], save_fig = False, dpi = 1000,\
@@ -149,7 +161,7 @@ for idx, c_subj in enumerate(subj_ids_somno):
     # =================== Compute correlations win by win =================== #
     Output_dic = Object.win_by_win_corr(sig1 = zmax_final, sig2 = somno_final,\
                                     fs = fs_res, win_size = 30, plot_synced_winodws = False)
-    # save it subjectively
+    # keep it subjectively
     subjective_corr_dic[subj_night[idx]] = Output_dic
     
     # =================== Plot spectrgoram of somno vs Zmax ================= #
@@ -166,13 +178,13 @@ for idx, c_subj in enumerate(subj_ids_somno):
 
 #%% Save outcomes        
 # ============================= save results ================================ #
-Object.save_dictionary( "F:/Zmax_Data/Results/SignalQualityAnalysis/",\
-                       "subjective_corr_results_140720", subjective_corr_dic)
+Object.save_dictionary( "F:/Zmax_Data/features/",\
+                       "subjective_corr_results+5sec Coherence_170720", subjective_corr_dic)
 
 #%% Load corr_outcomes
 # =========================== Load windowed corrs =========================== #
 subjective_corr_dic = Object.load_dictionary( "F:/Zmax_Data/features/",\
-                       "subjective_corr_results_140720")
+                       "subjective_corr_results+ Coherence_170720")
     
 #%% Get overall corr
 # ======================== Retrieve overall metrics ========================= #
@@ -190,4 +202,13 @@ Object.plot_boxplot(Overall_spearman_corr, Xlabels = subj_night, showmeans= True
                     Title = "Spearman correlation")
     
 #%% Quantifying some metrics
-Object.quanitifying_metric(subj_night, Overall_spearman_corr, metric_title = "spearman corr")
+Object.quanitifying_metric(subj_night, Overall_pearson_corr, metric_title = "pearson corr")
+
+#%% split the coherences per sleep stage
+Coherence_subjective_per_stage = Object.coherence_per_sleep_stage(subjective_corr_dic, subj_hyps,subj_night)
+
+#%% Plot coherence
+Object.plot_coherence_per_sleep_stage(subj_night, Coherence_subjective_per_stage,\
+                                      plot_all_subj_all_stage = False,\
+                                      plot_mean_per_stage = True,\
+                                      freq_range= "Sleep",print_resutls = True)
