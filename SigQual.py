@@ -265,8 +265,13 @@ class SigQual:
     def pearson_corr(self, sig1, sig2, abs_value = True, print_results = True):
         
         from scipy.stats import pearsonr
+        
+        try:
+            pearson_corr,pval = pearsonr(sig1, sig2)
+            
+        except TypeError:
+            pearson_corr,pval = pearsonr(np.ravel(sig1), np.ravel(sig2))
 
-        pearson_corr,pval = pearsonr(sig1, sig2)
         
         # calculate absolute corr if needed:
         if abs_value == True:
@@ -282,8 +287,12 @@ class SigQual:
     def spearman_corr(self, sig1, sig2, abs_value = True, print_results = True):
         
         from scipy.stats import spearmanr
-
-        spearman_corr,pval = spearmanr(sig1, sig2)
+        
+        try: 
+            spearman_corr,pval = spearmanr(sig1, sig2)
+            
+        except spearman_corr:
+            spearman_corr,pval  = spearmanr(np.ravel(sig1), np.ravel(sig2))
         
         # calculate absolute corr if needed:
         if abs_value == True:
@@ -299,7 +308,8 @@ class SigQual:
     
     def create_full_sig_after_sync(self, LRLR_start_somno, LRLR_start_zmax, fs_res,
                                  lag, full_sig_somno_before_sync,
-                                 full_sig_zmax_before_sync, plot_full_sig = False):
+                                 full_sig_zmax_before_sync, plot_full_sig = False,\
+                                 standardize_data = True):
         
         # rough lag 
         rough_lag = (LRLR_start_somno - LRLR_start_zmax) * fs_res
@@ -322,6 +332,16 @@ class SigQual:
             zmax_final  = full_sig_zmax_before_sync[:len_s]
             somno_final = truncated_beginning_somno
         
+        # Standardize 
+        if standardize_data == True:
+            try:
+                zmax_final  = self.Standardadize_data_fit_transform(zmax_final)
+                somno_final = self.Standardadize_data_fit_transform(somno_final)
+                
+            except ValueError:
+                zmax_final  = self.Standardadize_data_fit_transform(np.expand_dims(zmax_final, axis = 1))
+                somno_final = self.Standardadize_data_fit_transform(np.expand_dims(somno_final, axis = 1))
+            
         # Calculate final length
         common_length = np.min([len_s, len_z])  
         
@@ -336,7 +356,7 @@ class SigQual:
             plt.ylabel('Amplitude (v)', size = 15)
             plt.legend(prop={"size":20}, loc = "upper right") 
         
-        return zmax_final, somno_final
+        return zmax_final, somno_final, total_lag
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Plot section ~~~~~~~~~~~~~~~~~~~~~~~~~ #
     
     #%% plot EDF
@@ -360,9 +380,14 @@ class SigQual:
         import numpy as np
         import matplotlib.pyplot as plt
     
-        #==== plot 1st sig =======   
-        f, t, Sxx = spectrogram_lspopt(x=sig1, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
-                                       scaling='density')
+        #==== plot 1st sig =======  
+        try: 
+            f, t, Sxx = spectrogram_lspopt(x=sig1, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+                                           scaling='density')
+        except ValueError:
+            f, t, Sxx = spectrogram_lspopt(x=np.ravel(sig1), fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+                                           scaling='density')
+            
         Sxx = 10 * np.log10(Sxx) #power to db
             
         # Limit Sxx to the largest freq of interest:
@@ -378,7 +403,12 @@ class SigQual:
         plt.colorbar()
         # ==== plot 2nd sig ==== #
         plt.axes(axs[1])
-        f, t, Sxx = spectrogram_lspopt(x=sig2, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+        
+        try:
+            f, t, Sxx = spectrogram_lspopt(x=sig2, fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
+                                           scaling='density')
+        except ValueError:
+            f, t, Sxx = spectrogram_lspopt(x=np.ravel(sig2), fs=fs, c_parameter=20.0, nperseg=int(30*fs), \
                                        scaling='density')
         Sxx = 10 * np.log10(Sxx) #power to db
             
@@ -410,55 +440,76 @@ class SigQual:
     #%% Computing Coherence of signals
     def plot_coherence(self, sig1, sig2, Fs , NFFT = 256):
         plt.figure()
-        coh, f = plt.cohere(sig1, sig2, Fs = Fs, NFFT = NFFT)
+        try: 
+            coh, f = plt.cohere(sig1, sig2, Fs = Fs, NFFT = NFFT)
+        except ValueError:
+            coh, f = plt.cohere(np.ravel(sig1), np.ravel(sig2), Fs = Fs, NFFT = NFFT)
         plt.xlim([0, 30])
         
     #%% Plot PSD
-    def plot_psd(self, sig1, sig2, fs, NFFT = 2**11):
-        plt.figure()
+    def psd(self, sig1, sig2, fs, NFFT = 2**11, plot_psd = True, log_power = True):
         
-        plt.figure()
-        figure = plt.gcf()  # get current figure
-        figure.set_size_inches(26, 14)
+        from matplotlib.mlab import psd
         
-        # Global setting for axes values size
-        plt.rc('xtick',labelsize=16)
-        plt.rc('ytick',labelsize=16)
-        
-        # Plot power spectrums
-        psd_s1, f_psd_s1 = plt.psd(x=sig1,Fs = fs, label = 'Zmax', NFFT = NFFT, scale_by_freq= True, linewidth = 2, color = 'blue')           
-        psd_s2, f_psd_s2 = plt.psd(x=sig2,Fs = fs, label = 'somno',NFFT =NFFT, scale_by_freq= True, linewidth = 2, color = 'red')     
+        # Compute power spectrums
+        try:
+            psd_s1, f_psd_s1 = psd(x = sig1, Fs = fs, NFFT = NFFT, scale_by_freq= True)      
+            psd_s2, f_psd_s2 = psd(x = sig2, Fs = fs, NFFT = NFFT, scale_by_freq= True)  
+            
+        except ValueError:
+            psd_s1, f_psd_s1 = psd(x = np.ravel(sig1), Fs = fs, NFFT = NFFT, scale_by_freq= True)      
+            psd_s2, f_psd_s2 = psd(x = np.ravel(sig2), Fs = fs, NFFT = NFFT, scale_by_freq= True)           
+     
+        # Compute log of power (optional)
+            
+        if log_power == True:
+            
+            psd_s1 = 10*np.log10(psd_s1)
+            psd_s2 = 10*np.log10(psd_s2)
+            
         # ================== plot dashed lines of freq bins ========================= #
-        
-        #Delta
-        plt.axvline(.5, linestyle = '--', color = 'black')
-        plt.axvline(4, linestyle = '--', color = 'black')
-        
-        #Theta
-        plt.axvline(8, linestyle = '--', color = 'black')
-        
-        # Alpha
-        plt.axvline(12, linestyle = '--', color = 'black')
-        
-        # Title and labels
-        plt.title('Power spectral density throughout the night', size = 20)
-        plt.xlabel('Frequency (Hz)', size = 20)
-        plt.ylabel('Power spectral density (dB/ Hz)', size = 20)
-        
-        # Legend 
-        plt.legend(['Zmax EEG R', 'Somno F4'], prop = {'size':20})
-        
-        # Deactivate grid
-        plt.grid(False)
-        
-        # Adding labels
-        plt.text(1.5, -89, 'Delta',size =18)
-        plt.text(5, -89, 'Theta',size =18)
-        plt.text(9, -89, 'Alpha',size =18)
-        plt.text(13, -89, 'Beta',size =18)
-        
-        # Limiting x-axis to 0-30 Hz
-        plt.xlim([0, 30])
+        if plot_psd == True:
+            
+            # Open a new fig
+            fig, ax = plt.subplots(1,1, figsize=(20, 10))
+            
+            # Global setting for axes values size
+            plt.rc('xtick',labelsize=16)
+            plt.rc('ytick',labelsize=16)
+            
+            # Plot signals 
+            plt.plot(f_psd_s1, psd_s1, label = 'Zmax EEG R', color = 'blue')
+            plt.plot(f_psd_s2, psd_s2, label = 'Somno F4:A1', color = 'red')
+
+            #Delta
+            plt.axvline(.5, linestyle = '--', color = 'black')
+            plt.axvline(4, linestyle = '--', color = 'black')
+            
+            #Theta
+            plt.axvline(8, linestyle = '--', color = 'black')
+            
+            # Alpha
+            plt.axvline(12, linestyle = '--', color = 'black')
+            
+            # Title and labels
+            plt.title('Power spectral density throughout the night', size = 20)
+            plt.xlabel('Frequency (Hz)', size = 20)
+            plt.ylabel('Power spectral density (dB/ Hz)', size = 20)
+            
+            # Legend 
+            plt.legend(['Zmax EEG R', 'Somno F4'], prop = {'size':20})
+            
+            # Deactivate grid
+            plt.grid(False)
+            
+            # Adding labels
+            plt.text(1.5, 2, 'Delta',size =18)
+            plt.text(5, 2, 'Theta',size =18)
+            plt.text(9, 2, 'Alpha',size =18)
+            plt.text(13, 2, 'Beta',size =18)
+            
+            # Limiting x-axis to 0-30 Hz
+            plt.xlim([0, 30])
         
         return psd_s1, f_psd_s1, psd_s2, f_psd_s2
 
@@ -558,6 +609,9 @@ class SigQual:
             # concatenate lags per win
             list_lags.append(lag)
             
+            # Convert lags: smaples --> secs
+            list_lags_sec = [x / fs for x in list_lags]
+            
             # Also keep the synced signals for any further analysis
             signal1_dic_windowed['window'+str(i)] = curr_sig1
             signal2_dic_windowed['window'+str(i)] = curr_sig2_synced
@@ -580,11 +634,13 @@ class SigQual:
         Outcome_dic_windowed['Pearson_pval']     = list_pearson_pval
         Outcome_dic_windowed['Spearman_corr']    = list_spearman_corr
         Outcome_dic_windowed['Spearman_pval']    = list_spearman_pval
-        Outcome_dic_windowed['lags']             = list_lags
+        Outcome_dic_windowed['lags_sample']      = list_lags
+        Outcome_dic_windowed['lags_sec']         = list_lags_sec
         Outcome_dic_windowed['signal1_windowed'] = signal1_dic_windowed
         Outcome_dic_windowed['signal2_windowed'] = signal2_dic_windowed
         Outcome_dic_windowed['Coherence']        = overall_Cxy
-
+        Outcome_dic_windowed['signal1_full']     = sig1
+        Outcome_dic_windowed['signal2_full']     = sig2
         return Outcome_dic_windowed
     
     #%% Compute coherence per synced window    
@@ -710,7 +766,13 @@ class SigQual:
                 curr_sig2_5sec = sig2_curr_epoch[jj * fs: (jj+5)*fs]
                 
                 # Dompute coherence
-                f, Cxy      = signal.coherence(curr_sig1_5sec, curr_sig2_5sec, fs = fs)
+# =============================================================================
+#                 try:
+#                     f, Cxy      = signal.coherence(curr_sig1_5sec, curr_sig2_5sec, fs = fs)
+#                 except ValueError:
+# =============================================================================
+                f, Cxy      = signal.coherence(np.ravel(curr_sig1_5sec), np.ravel(curr_sig2_5sec), fs = fs)
+                    
                 overall_Cxy = np.row_stack((overall_Cxy, Cxy))
                 
         return overall_Cxy
@@ -736,6 +798,26 @@ class SigQual:
             del tmp_subj, tmp_measure 
             
         return measure_all_subjs
+    
+    #%% Z-score the dataset -> fit_to_one_transform_to_other
+    
+    def Standardadize_data_fit_to_one_transform_to_other(self, data1, data2):
+        from sklearn.preprocessing import StandardScaler
+        sc = StandardScaler()
+        data1_normalized = sc.fit_transform(data1)
+        data2_normalized = sc.transform(data2)
+        
+        return data1_normalized, data2_normalized
+    
+    #%% Z-score the dataset
+    
+    def Standardadize_data_fit_transform(self, data):
+        from sklearn.preprocessing import StandardScaler
+        sc = StandardScaler()
+        data_normalized = sc.fit_transform(data)
+        
+        return data_normalized 
+    
     #%% Plot boxplot of data
     def plot_boxplot(self, data, Xlabels, Title, showmeans= True):
         
@@ -804,6 +886,239 @@ class SigQual:
             print("Length of data and hypnogram are identical! Perfect!")
         else:
             raise ValueError("Lengths of data epochs and hypnogram labels are different!!!")
+    #%% Permutation test on on PSD
+    def split_psd_whole_night(self, subj_night, subjective_corr_dic,subj_hyps,\
+                             fs, NFFT = 2**11):
+                
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Init ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+        # Dict of all vals
+        psd_WholeNight_dict      = dict()
+        
+        # Full range (0-30 Hz)
+        all_subjs_psd_sig1_full  = np.empty((0,1))
+        all_subjs_psd_sig2_full  = np.empty((0,1))
+        
+        # Delta
+        all_subjs_psd_sig1_delta = np.empty((0,1))
+        all_subjs_psd_sig2_delta = np.empty((0,1))
+        
+        # Theta
+        all_subjs_psd_sig1_theta = np.empty((0,1))
+        all_subjs_psd_sig2_theta = np.empty((0,1))
+        
+        # Alpha
+        all_subjs_psd_sig1_alpha = np.empty((0,1))
+        all_subjs_psd_sig2_alpha = np.empty((0,1))
+        
+        # Beta
+        all_subjs_psd_sig1_beta = np.empty((0,1))
+        all_subjs_psd_sig2_beta = np.empty((0,1))
+        
+        freq_ix            = dict()
+        
+        # Defining EEG bands:
+        eeg_bands = {'Delta'     : (0.5, 4),
+                     'Theta'     : (4  , 8),
+                     'Alpha'     : (8  , 12),
+                     'Beta'      : (12 , 30),
+                     '0_30Hz'    : (0  , 30)}
+
+        # Iterate over subjects
+        for i,subj in enumerate(subj_night):
+            
+            # Receive sig1 and sig2 
+            sig1_tmp = subjective_corr_dic[subj]['signal1_full']
+            sig2_tmp = subjective_corr_dic[subj]['signal2_full']
+            
+            psd_s1, f_psd_s1, psd_s2, f_psd_s2 = self.psd(sig1_tmp, sig2_tmp, fs=fs,\
+                                                          NFFT = NFFT, plot_psd = False, log_power = True)
+            
+            # Find corresponding idx of required samples
+            for band in eeg_bands:
+                freq_ix[band] = np.where((f_psd_s1 >= eeg_bands[band][0]) &   
+                               (f_psd_s1 <= eeg_bands[band][1]))[0]  
+            
+            # ================== Concatenate psd of signals  ================ #
+            
+            try:
+                
+                # [0-30 Hz] bandwidth
+                all_subjs_psd_sig1_full = np.row_stack((all_subjs_psd_sig1_full, psd_s1[freq_ix['0_30Hz']]))
+                all_subjs_psd_sig2_full = np.row_stack((all_subjs_psd_sig2_full, psd_s2[freq_ix['0_30Hz']]))
+                
+                # Delta
+                all_subjs_psd_sig1_delta = np.row_stack((all_subjs_psd_sig1_delta, psd_s1[freq_ix['Delta']]))
+                all_subjs_psd_sig2_delta = np.row_stack((all_subjs_psd_sig2_delta, psd_s2[freq_ix['Delta']]))
+                
+                # Theta
+                all_subjs_psd_sig1_theta = np.row_stack((all_subjs_psd_sig1_theta, psd_s1[freq_ix['Theta']]))
+                all_subjs_psd_sig2_theta = np.row_stack((all_subjs_psd_sig2_theta, psd_s2[freq_ix['Theta']]))
+                
+                # Alpha
+                all_subjs_psd_sig1_alpha = np.row_stack((all_subjs_psd_sig1_alpha, psd_s1[freq_ix['Alpha']]))
+                all_subjs_psd_sig2_alpha = np.row_stack((all_subjs_psd_sig2_alpha, psd_s2[freq_ix['Alpha']]))
+                
+                # Beta
+                all_subjs_psd_sig1_beta = np.row_stack((all_subjs_psd_sig1_beta, psd_s1[freq_ix['Beta']]))
+                all_subjs_psd_sig2_beta = np.row_stack((all_subjs_psd_sig2_beta, psd_s2[freq_ix['Beta']]))
+                
+            except ValueError:
+                
+                # [0-30 Hz] bandwidth
+                all_subjs_psd_sig1_full = np.row_stack((all_subjs_psd_sig1_full, np.expand_dims(psd_s1[freq_ix['0_30Hz']], axis = 1)))
+                all_subjs_psd_sig2_full = np.row_stack((all_subjs_psd_sig2_full, np.expand_dims(psd_s2[freq_ix['0_30Hz']], axis = 1)))
+                
+                # Delta
+                all_subjs_psd_sig1_delta = np.row_stack((all_subjs_psd_sig1_delta, np.expand_dims(psd_s1[freq_ix['Delta']], axis = 1)))
+                all_subjs_psd_sig2_delta = np.row_stack((all_subjs_psd_sig2_delta, np.expand_dims(psd_s2[freq_ix['Delta']], axis = 1)))
+                
+                # Theta
+                all_subjs_psd_sig1_theta = np.row_stack((all_subjs_psd_sig1_theta, np.expand_dims(psd_s1[freq_ix['Theta']], axis = 1)))
+                all_subjs_psd_sig2_theta = np.row_stack((all_subjs_psd_sig2_theta, np.expand_dims(psd_s2[freq_ix['Theta']], axis = 1)))
+                
+                # Alpha
+                all_subjs_psd_sig1_alpha = np.row_stack((all_subjs_psd_sig1_alpha, np.expand_dims(psd_s1[freq_ix['Alpha']], axis = 1)))
+                all_subjs_psd_sig2_alpha = np.row_stack((all_subjs_psd_sig2_alpha, np.expand_dims(psd_s2[freq_ix['Alpha']], axis = 1)))
+                
+                # Beta
+                all_subjs_psd_sig1_beta = np.row_stack((all_subjs_psd_sig1_beta, np.expand_dims(psd_s1[freq_ix['Beta']], axis = 1)))
+                all_subjs_psd_sig2_beta = np.row_stack((all_subjs_psd_sig2_beta, np.expand_dims(psd_s2[freq_ix['Beta']], axis = 1)))
+                
+            del psd_s1, psd_s2, f_psd_s1, f_psd_s2
+        
+        # Store the psd of freq_bins in a dict
+        psd_WholeNight_dict['0_30Hz_sig1'] = all_subjs_psd_sig1_full
+        psd_WholeNight_dict['0_30Hz_sig2'] = all_subjs_psd_sig2_full
+        
+        psd_WholeNight_dict['Delta_sig1']  = all_subjs_psd_sig1_delta
+        psd_WholeNight_dict['Delta_sig2']  = all_subjs_psd_sig2_delta
+        
+        psd_WholeNight_dict['Theta_sig1']  = all_subjs_psd_sig1_theta
+        psd_WholeNight_dict['Theta_sig2']  = all_subjs_psd_sig2_theta
+        
+        psd_WholeNight_dict['Alpha_sig1']  = all_subjs_psd_sig1_alpha
+        psd_WholeNight_dict['Alpha_sig2']  = all_subjs_psd_sig2_alpha
+        
+        psd_WholeNight_dict['Beta_sig1']  = all_subjs_psd_sig1_beta
+        psd_WholeNight_dict['Beta_sig2']  = all_subjs_psd_sig2_beta
+        
+        return psd_WholeNight_dict
+    
+    #%% Random permutation of PSDs
+    def permutation_test_psd(self, psd_WholeNight_dict, n_perm = 1000, print_reference_means = True):
+        
+        # Import 
+        import random 
+        
+        # Init 
+        diff_delta = []
+        diff_theta = []
+        diff_alpha = []
+        diff_beta  = []
+        diff_full  = []
+        p_val      = dict()
+        # ============== Define ground truth per freq bin =================== #
+        
+        # 0-30 Hz
+        ref_full  = np.abs(np.mean(psd_WholeNight_dict['0_30Hz_sig2']) - np.mean(psd_WholeNight_dict['0_30Hz_sig1']))
+        
+        # Delta
+        ref_delta = np.abs(np.mean(psd_WholeNight_dict['Delta_sig2']) - np.mean(psd_WholeNight_dict['Delta_sig1']))
+        
+        # Theta 
+        ref_theta = np.abs(np.mean(psd_WholeNight_dict['Theta_sig2']) - np.mean(psd_WholeNight_dict['Theta_sig1']))
+        
+        # Alpha
+        ref_alpha = np.abs(np.mean(psd_WholeNight_dict['Alpha_sig2']) - np.mean(psd_WholeNight_dict['Alpha_sig1']))
+        
+        # Beta
+        ref_beta  = np.abs(np.mean(psd_WholeNight_dict['Beta_sig2']) - np.mean(psd_WholeNight_dict['Beta_sig1']))
+        
+        # Print reference means
+        
+        if print_reference_means == True:
+            print(f'The reference mean for Delta, Theta, Alpha, Beta, and [0-30 Hz]')
+            print(f'are: {"{:.2f}".format(ref_delta)}, {"{:.2f}".format(ref_theta)}, {"{:.2f}".format(ref_alpha)}, {"{:.2f}".format(ref_beta)}, {"{:.2f}".format(ref_full)}')
+        
+        # ~~~~~~~~~~~~~~~~~~ Pooling data per freq bin ~~~~~~~~~~~~~~~~~~~~~~ #
+            
+        # Delta
+        pooled_delta = np.row_stack((psd_WholeNight_dict['Delta_sig1'], psd_WholeNight_dict['Delta_sig2']))
+        pooled_delta_tmp = pooled_delta
+        
+        # Theta
+        pooled_theta = np.row_stack((psd_WholeNight_dict['Theta_sig1'], psd_WholeNight_dict['Theta_sig2']))
+        pooled_theta_tmp = pooled_theta
+        
+        # Alpha
+        pooled_alpha = np.row_stack((psd_WholeNight_dict['Alpha_sig1'], psd_WholeNight_dict['Alpha_sig2']))
+        pooled_alpha_tmp = pooled_alpha
+        
+        # Beta
+        pooled_beta  = np.row_stack((psd_WholeNight_dict['Beta_sig1'], psd_WholeNight_dict['Beta_sig2']))
+        pooled_beta_tmp = pooled_beta
+        
+        # [0-30 Hz]
+        pooled_full  = np.row_stack((psd_WholeNight_dict['0_30Hz_sig1'], psd_WholeNight_dict['0_30Hz_sig2']))
+        pooled_full_tmp = pooled_full
+        
+        # ========================== Shuffle groups ========================= #
+        for j in np.arange(n_perm):
+            
+            # Delta
+            random.shuffle(pooled_delta_tmp)
+            
+            # Theta
+            random.shuffle(pooled_theta_tmp)
+            
+            # Alpha
+            random.shuffle(pooled_alpha_tmp)
+            
+            # Beta
+            random.shuffle(pooled_beta_tmp)
+            
+            # full ([0 - 30] Hz)
+            random.shuffle(pooled_full_tmp)
+            
+            # == Compute permuted absolute difference of two distributions == #
+           
+            # Delta
+            diff_delta.append(np.abs(np.average(pooled_delta_tmp[0:int(len(pooled_delta_tmp)/2)]) - np.average(pooled_delta_tmp[int(len(pooled_delta_tmp)/2):])))
+            
+            # Theta
+            diff_theta.append(np.abs(np.average(pooled_theta_tmp[0:int(len(pooled_theta_tmp)/2)]) - np.average(pooled_theta_tmp[int(len(pooled_theta_tmp)/2):])))
+            
+            # Alpha
+            diff_alpha.append(np.abs(np.average(pooled_alpha_tmp[0:int(len(pooled_alpha_tmp)/2)]) - np.average(pooled_alpha_tmp[int(len(pooled_alpha_tmp)/2):])))
+            
+            # Beta
+            diff_beta.append(np.abs(np.average(pooled_beta_tmp[0:int(len(pooled_beta_tmp)/2)]) - np.average(pooled_beta_tmp[int(len(pooled_beta_tmp)/2):])))
+            
+            # full ([0 - 30] Hz)
+            diff_full.append(np.abs(np.average(pooled_full_tmp[0:int(len(pooled_full_tmp)/2)]) - np.average(pooled_full_tmp[int(len(pooled_full_tmp)/2):])))
+            
+        # =========================== Compuite p-val ======================== #
+            
+        p_val_delta = len(np.where(diff_delta >= ref_delta)[0]) / n_perm
+        
+        p_val_theta = len(np.where(diff_theta >= ref_theta)[0]) / n_perm
+        
+        p_val_alpha = len(np.where(diff_alpha >= ref_alpha)[0]) / n_perm
+         
+        p_val_beta  = len(np.where(diff_beta >= ref_beta)[0]) / n_perm
+          
+        p_val_full  = len(np.where(diff_full >= ref_full)[0]) / n_perm
+        
+        # Put all p-vals in a dict
+        p_val['delta'] = p_val_delta
+        p_val['theta'] = p_val_theta
+        p_val['alpha'] = p_val_alpha
+        p_val['beta']  = p_val_beta
+        p_val['full']  = p_val_full
+         
+        return p_val_delta, p_val
+
+            
             
     #%% Plot coherence per sleep stage
     def plot_coherence_per_sleep_stage(self, subj_night, Coherence_subjective_per_stage,\

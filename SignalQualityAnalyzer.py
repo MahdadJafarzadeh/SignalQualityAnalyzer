@@ -4,6 +4,8 @@ Created on Sat Jul 11 14:13:18 2020
 
 CopyRight: Mahdad Jafarzadeh 
 
+SigQual: The package to analyze the quality of signals!
+
 """
 #%% Import libs
 #####===================== Importiung libraries =========================#####
@@ -27,6 +29,7 @@ from scipy.stats import pearsonr, spearmanr
 import matplotlib.mlab as mlab
 import pandas as pd
 from SigQual import SigQual
+from matplotlib.mlab import psd
 
 #%% Initiate an object from SigQual class
 Object = SigQual()
@@ -68,12 +71,12 @@ psd_zmax_dic        = dict()
 f_psd_somno_dic     = dict()
 f_psd_zmax_dic      = dict()
 subjective_corr_dic = dict()
-
+total_lags_full_sig = dict()
 #%% Main loop of analysis
 #####======================== Iterating through subjs=====================#####
-subj_ids_somno = ["F:/Zmax_Data/Somnoscreen_Data/P_12/P12 night2_B.25.11.2018/P12_night2_B_markers_(1).edf"]
+
 for idx, c_subj in enumerate(subj_ids_somno):
-    
+
     # define the current zmax data
     curr_zmax  = subj_ids_zmax[idx]
     
@@ -154,10 +157,11 @@ for idx, c_subj in enumerate(subj_ids_somno):
     full_sig_zmax_before_sync  = zmax_data_R
     
     # Get final sigs and plot them
-    zmax_final, somno_final = Object.create_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
+    zmax_final, somno_final, total_lag = Object.create_full_sig_after_sync(LRLR_start_somno, LRLR_start_zmax, fs_res,
                                  lag, full_sig_somno_before_sync,
-                                 full_sig_zmax_before_sync, plot_full_sig = False)
-    
+                                 full_sig_zmax_before_sync, plot_full_sig = False,\
+                                 standardize_data = True)
+    total_lags_full_sig[subj_night[idx]] = total_lag
     # =================== Compute correlations win by win =================== #
     Output_dic = Object.win_by_win_corr(sig1 = zmax_final, sig2 = somno_final,\
                                     fs = fs_res, win_size = 30, plot_synced_winodws = False)
@@ -173,18 +177,21 @@ for idx, c_subj in enumerate(subj_ids_somno):
     coh, f = Object.plot_coherence(somno_final, zmax_final, Fs = fs_res, NFFT = 256)
     
     # ============================== Plot psd =============================== #
-    psd_s1, f_psd_s1, psd_s2, f_psd_s2 = Object.plot_psd(sig1 = zmax_final,\
-                                sig2 = somno_final, fs = fs_res, NFFT = 2**11)
-
+    psd_s1, f_psd_s1, psd_s2, f_psd_s2 = Object.psd(sig1 = zmax_final,\
+                                sig2 = somno_final, fs = fs_res, NFFT = 2**11,\
+                                plot_psd = False, log_power = True)
+        
+    plt.plot(f_psd_s2, 10*np.log10(psd_s2), color ='cyan')
+        
 #%% Save outcomes        
 # ============================= save results ================================ #
 Object.save_dictionary( "F:/Zmax_Data/features/",\
-                       "subjective_corr_results+5sec Coherence_170720", subjective_corr_dic)
+                       "subjective_corr_results_Normalized_5min_win_by_win_corr_280720", subjective_corr_dic)
 
 #%% Load corr_outcomes
 # =========================== Load windowed corrs =========================== #
 subjective_corr_dic = Object.load_dictionary( "F:/Zmax_Data/features/",\
-                       "subjective_corr_results+ Coherence_170720")
+                       "subjective_corr_results_Normalized_210720")
     
 #%% Get overall corr
 # ======================== Retrieve overall metrics ========================= #
@@ -211,4 +218,12 @@ Coherence_subjective_per_stage = Object.coherence_per_sleep_stage(subjective_cor
 Object.plot_coherence_per_sleep_stage(subj_night, Coherence_subjective_per_stage,\
                                       plot_all_subj_all_stage = False,\
                                       plot_mean_per_stage = True,\
-                                      freq_range= "Sleep",print_resutls = True)
+                                      freq_range= "Theta",print_resutls = True)
+
+#%% Divide the whole night PSDs based on freq bins
+psd_WholeNight_dict = Object.split_psd_whole_night(subj_night, subjective_corr_dic,subj_hyps,\
+                             fs = 256, NFFT = 2**11)
+    
+#%% Apply permutation test
+p_val_delta, p_val = Object.permutation_test_psd(psd_WholeNight_dict,  n_perm = 1000,\
+                                                 print_reference_means = True)
