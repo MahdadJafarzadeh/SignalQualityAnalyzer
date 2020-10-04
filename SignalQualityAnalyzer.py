@@ -22,7 +22,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import confusion_matrix, make_scorer, accuracy_score, precision_score, recall_score, f1_score, classification_report
 import pandas as pd
-import tensorflow as tf
 from scipy import signal
 from scipy.signal import butter, lfilter, periodogram, spectrogram, welch, filtfilt, iirnotch
 from scipy.stats import pearsonr, spearmanr
@@ -30,6 +29,7 @@ import matplotlib.mlab as mlab
 import pandas as pd
 from SigQual import SigQual
 from matplotlib.mlab import psd
+%matplotlib qt
 
 #%% Initiate an object from SigQual class
 Object = SigQual()
@@ -39,14 +39,14 @@ Object = SigQual()
 #####=========================== Reading data ============================#####
 
 # Main path
-main_path       = "F:/Zmax_Data/features/"
+main_path       = "D:/Zmax_Data/features/"
  
 # Read location of Somno data
-subj_ids_somno  = Object.read_txt(main_path = main_path, file_name =  "SigQual_Somno_data_loc",\
+subj_ids_somno  = Object.read_txt(main_path = main_path, file_name =  "SigQual_Somno_data_loc2",\
                                   dtype = 'str',delimiter='\n') 
     
 # Read Zmax data
-subj_ids_zmax   =  Object.read_txt(main_path = main_path, file_name =  "SigQual_Zmax_data_loc",\
+subj_ids_zmax   =  Object.read_txt(main_path = main_path, file_name =  "SigQual_Zmax_data_loc2",\
                                   dtype = 'str',delimiter='\n') 
 
 
@@ -55,7 +55,7 @@ subj_night      = Object.read_txt(main_path = main_path, file_name =  "Subject_N
                                   dtype = 'str',delimiter='\n') 
 
 # read event markers path to sync data
-sync_markers_main_path = "F:/Zmax_Data/features/"
+sync_markers_main_path = "D:/Zmax_Data/features/"
 event_markers = Object.read_excel(main_path = sync_markers_main_path, filename = "Sync_periods")
 
 # Read Hypnograms
@@ -70,7 +70,7 @@ psd_somno_dic       = dict()
 psd_zmax_dic        = dict()
 f_psd_somno_dic     = dict()
 f_psd_zmax_dic      = dict()
-subjective_corr_dic = dict()
+subjective_dic      = dict()
 total_lags_full_sig = dict()
 #%% Main loop of analysis
 #####======================== Iterating through subjs=====================#####
@@ -106,33 +106,21 @@ for idx, c_subj in enumerate(subj_ids_somno):
     
     # ======================= Filter data before resample =================== #
     
-# =============================================================================
-#     data_R_filt    = Object.mne_obj_filter(data = data_R, l_freq = .1, h_freq=30)
-#     data_L_filt    = Object.mne_obj_filter(data = data_L, l_freq = .1, h_freq=30)
-#     EEG_somno_filt = Object.mne_obj_filter(data = EEG_somno, l_freq = .1, h_freq=30)
-#     
-# =============================================================================
+    data_R    = Object.mne_obj_filter(data = data_R, l_freq = .1, h_freq=30)
+    data_L    = Object.mne_obj_filter(data = data_L, l_freq = .1, h_freq=30)
+    EEG_somno = Object.mne_obj_filter(data = EEG_somno, l_freq = .1, h_freq=30)
+    
     # ======================= Resampling to lower freq ====================== #
      
     fs_res, data_R, EEG_somno = Object.resample_data(data_R, EEG_somno, fs_zmax, fs_somno)
     _ , data_L, _      = Object.resample_data(data_L, EEG_somno, fs_zmax, fs_somno)
 
     # ========================== Get data arrays ============================ #
-    data_L_get = data_L.get_data()
-    data_R_get = data_R.get_data()
-    data_somno_get = EEG_somno.get_data()
     
-    # ====================== Filtering resampled data ======================= #
+    data_L_resampled_filtered = data_L.get_data()
+    data_R_resampled_filtered = data_R.get_data()
+    EEG_somno_resampled_filtered = EEG_somno.get_data()
     
-    data_L_resampled_filtered    = Object.butter_bandpass_filter(data_L_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
-    data_R_resampled_filtered    = Object.butter_bandpass_filter(data_R_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
-    EEG_somno_resampled_filtered = Object.butter_bandpass_filter(data_somno_get, lowcut=.1, highcut=30, fs=fs_res, order = 2)
-    
-# =============================================================================
-#     data_L_resampled_filtered = data_L_get
-#     data_R_resampled_filtered = data_R_get
-#     EEG_somno_resampled_filtered = data_somno_get
-# =============================================================================
     # ====================== Synchronization of data ======================== #
     
     # required inputs to sync
@@ -146,7 +134,7 @@ for idx, c_subj in enumerate(subj_ids_somno):
                   data_R_resampled_filtered, data_L_resampled_filtered, \
                   EEG_somno_resampled_filtered, AvailableChannels_s, save_name = subj_night[idx], \
                   RequiredChannels = ['F4:A1'], save_fig = False, dpi = 1000,\
-                  save_dir = "F:/Zmax_Data/Results/SignalQualityAnalysis/",
+                  save_dir = "D:/Zmax_Data/Results/SignalQualityAnalysis/",
                   report_pearson_corr_during_sync  = True,\
                   report_spearman_corr_during_sync = True,\
                   plot_cross_corr_lag = False)
@@ -166,12 +154,12 @@ for idx, c_subj in enumerate(subj_ids_somno):
     Output_dic = Object.win_by_win_corr(sig1 = zmax_final, sig2 = somno_final,\
                                     fs = fs_res, win_size = 30, plot_synced_winodws = False)
     # keep it subjectively
-    subjective_corr_dic[subj_night[idx]] = Output_dic
+    subjective_dic[subj_night[idx]] = Output_dic
     
     # =================== Plot spectrgoram of somno vs Zmax ================= #
     f_spect_s, f_spect_z, Sxx_s, Sxx_z = Object.spectrogram_creation(somno_final, zmax_final, fs_res,\
                                          save_name="spect_"+subj_night[idx], save_fig = False, dpi = 1000,\
-                                         save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis")
+                                         save_dir = "D:\Zmax_Data\Results\SignalQualityAnalysis")
     
     # ========================= Plot coherence ============================== #
     coh, f = Object.plot_coherence(somno_final, zmax_final, Fs = fs_res, NFFT = 256)
@@ -185,20 +173,24 @@ for idx, c_subj in enumerate(subj_ids_somno):
         
 #%% Save outcomes        
 # ============================= save results ================================ #
-Object.save_dictionary( "F:/Zmax_Data/features/",\
-                       "subjective_corr_results_Normalized_5min_win_by_win_corr_280720", subjective_corr_dic)
+Object.save_dictionary( "D:/Zmax_Data/features/",\
+                       "subjective_results_Normalized_5min_win_by_win_corr_031020", subjective_dic)
 
 #%% Load corr_outcomes
 # =========================== Load windowed corrs =========================== #
-subjective_corr_dic = Object.load_dictionary( "F:/Zmax_Data/features/",\
-                       "subjective_corr_results_Normalized_210720")
-    
+subjective_dic = Object.load_dictionary( "D:/Zmax_Data/features/",\
+                       "subjective_results_Normalized_5min_win_by_win_corr_031020")
+
+#%% Analyze drift aftersync --> does it cause epoch shift between devices?
+
+Object.analyze_dift_after_sync(subjective_dic, subj_night, save_fig = True,\
+                                save_dir = "M:/Music/")
 #%% Get overall corr
 # ======================== Retrieve overall metrics ========================= #
-Overall_pearson_corr  = Object.get_overall_measure(subjective_corr_dic,\
+Overall_pearson_corr  = Object.get_overall_measure(subjective_dic,\
                                                   subj_night, measure = "Pearson_corr")
     
-Overall_spearman_corr = Object.get_overall_measure(subjective_corr_dic,\
+Overall_spearman_corr = Object.get_overall_measure(subjective_dic,\
                                                   subj_night, measure = "Spearman_corr")
     
 #%% Boxplot     
@@ -212,7 +204,7 @@ Object.plot_boxplot(Overall_spearman_corr, Xlabels = subj_night, showmeans= True
 Object.quanitifying_metric(subj_night, Overall_pearson_corr, metric_title = "pearson corr")
 
 #%% split the coherences per sleep stage
-Coherence_subjective_per_stage = Object.coherence_per_sleep_stage(subjective_corr_dic, subj_hyps,subj_night)
+Coherence_subjective_per_stage = Object.coherence_per_sleep_stage(subjective_dic, subj_hyps,subj_night)
 
 #%% Plot coherence
 Object.plot_coherence_per_sleep_stage(subj_night, Coherence_subjective_per_stage,\
@@ -221,7 +213,7 @@ Object.plot_coherence_per_sleep_stage(subj_night, Coherence_subjective_per_stage
                                       freq_range= "Theta",print_resutls = True)
 
 #%% Divide the whole night PSDs based on freq bins
-psd_WholeNight_dict = Object.split_psd_whole_night(subj_night, subjective_corr_dic,subj_hyps,\
+psd_WholeNight_dict = Object.split_psd_whole_night(subj_night, subjective_dic,subj_hyps,\
                              fs = 256, NFFT = 2**11)
     
 #%% Apply permutation test

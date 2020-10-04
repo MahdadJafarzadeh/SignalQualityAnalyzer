@@ -247,7 +247,7 @@ class SigQual:
             xpos = lag
             xmax = lag
             
-            # Creating arrot to point to max
+            # Creating arrow to point to max
             ax.annotate('max correlation', xy=(xmax, ymax), xytext=(xmax, ymax+ymax/10),
                         arrowprops=dict(facecolor='red', shrink=0.05),
                         )
@@ -1324,6 +1324,51 @@ class SigQual:
 #             plt.ylim([0,1])
 #             
 # =============================================================================
+
+#%% Analyze drift of lags after sync period
+    def analyze_dift_after_sync(self, subjective_dic, subj_night, save_fig = False,\
+                                save_dir = "C:/"):
+        
+        for i in np.arange(len(subj_night)):
+            
+            # Select a subject
+            Subj = subjective_dic[subj_night[i]]
+            Lags = Subj['lags_sec']    
+            
+            # Show all lags
+            plt.figure()
+            plt.plot(np.arange(len(Lags)), Lags, linewidth = 2, label = "lag")
+            
+            # Calculate regression 
+            m, b = np.polyfit(np.arange(len(Lags)), Lags, 1)
+            
+            # Plot regression
+            plt.plot(np.arange(len(Lags)), m*np.arange(len(Lags)) + b, linewidth = 5, \
+                     color = 'red', label = 'Regeression')
+            
+            # add title etc
+            plt.title('Analysis of drift after initial alignment - ' + str(subj_night[i]), size = 20)
+            plt.xlabel("Epochs", size=  18)
+            plt.ylabel("second", size = 18)
+            plt.legend(prop={"size":20})
+            
+            # Global setting for axes values size
+            plt.rc('xtick',labelsize=16)
+            plt.rc('ytick',labelsize=16)
+            
+            #=== Maximize ====
+            figure = plt.gcf()  # get current figure
+            figure.set_size_inches(32, 18)
+            plt.show()
+            
+            #Save figure
+            if save_fig == True:
+                self.save_figure(directory=save_dir, saving_name= "analyze_dift_after_sync"+\
+                                 str(subj_night[i]),
+                                 dpi=300, saving_format = '.png',
+                                 full_screen = False)
+            
+            
             
             
                 
