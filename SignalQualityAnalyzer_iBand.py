@@ -4,7 +4,9 @@ Created on Sat Jul 11 14:13:18 2020
 
 CopyRight: Mahdad Jafarzadeh 
 
-SigQual: The package to analyze the quality of signals!
+This code should be use when the investigational wearable doesn't have a high sensible
+drift over time. If there is a large drift over time, please use:
+    SignalQualityAnalyzer_iBand_v2.py'
 
 """
 #%% Import libs
@@ -158,15 +160,6 @@ for idx, c_subj in enumerate(subj_ids_somno):
     Output_dic = Object.win_by_win_corr(sig1 = iBand_final, sig2 = somno_final,\
                                     fs = fs_res, win_size = 30, plot_synced_winodws = False,\
                                     plot_correlation = True)
-        
-    # ====== Periodic sync (this function syncs sigs once in a while) ======= #
-    Output_dic, periodically_synced_sig1 = Object.win_by_win_drift_compensation(sig1 = iBand_final, sig2 = somno_final, fs = fs_res,\
-                                    win_size = 30, plot_synced_winodws = True,\
-                                    plot_correlation = True, report_correlation = True,\
-                                    drift_comp_thresh = 1)
-        
-    # keep outcomes subjectively
-    subjective_dic[subj_night[idx]] = Output_dic
         
     # =================== Plot spectrgoram of somno vs iBand ================= #
     f_spect_s, f_spect_z, Sxx_s, Sxx_z = Object.spectrogram_creation(somno_final, iBand_final, fs_res,\
