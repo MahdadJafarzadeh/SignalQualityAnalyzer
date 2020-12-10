@@ -3,7 +3,7 @@
 SigQual
 CopyRight: Mahdad Jafarzadeh - 2020
 
-Simulation of synchronizing two sinusoidal waves.
+Basic synchronizing on two simulated sinusoidal waves.
 
 """
 
@@ -25,8 +25,8 @@ f2 = 1
 x2 = 1e-6*np.cos(2*3.14*f2*t1)
 
 # plot original sigs
-plt.plot(t1,x1, color = 'blue', label = 'sin')
-plt.plot(t1,x2, color = 'red', label = 'cos')
+plt.plot(t1,x1, color = 'blue', label = 'Original sig1')
+plt.plot(t1,x2, color = 'red',  label = 'Original sig2')
 
 # correlation
 corr = signal.correlate(x1, x2)
@@ -40,13 +40,13 @@ corr_sign = np.max(min_max_corr)
 # Shift sig 1 forward if the corr < 0
 if corr_sign == min_max_corr[0]: # if negative corr
     lag  = np.argmin(corr) - len(x1) + 1
-    plt.plot(t1+lag/fs , x1 , color = 'black')
+    plt.plot(t1+lag/fs , x1 , color = 'black', label = 'synced signal')
     
 # Shift sig 1 backward if the corr > 0
 else:                            # if positive corr
     lag  = np.argmax(corr) - len(x1) + 1
-    plt.plot(t1-lag/fs , x1 , color = 'black')
-
+    plt.plot(t1-lag/fs , x1 , color = 'black', label = 'synced signal')
+plt.legend()   
     
 # Plot correlation
 plt.figure()
