@@ -122,14 +122,15 @@ class SigQual:
         return fs_res, data1, data2
     
     #%% Synchronization section
-    def sync_data(self, fs_res, LRLR_start_zmax, LRLR_end_zmax, LRLR_start_somno, LRLR_end_somno,\
+    def sync_data(self, fs_res, LRLR_start_iBand, LRLR_end_iBand, LRLR_start_somno, LRLR_end_somno,\
                   data_R_resampled_filtered, data_L_resampled_filtered, \
-                  EEG_somno_resampled_filtered, AvailableChannels, save_name, \
-                  RequiredChannels = ['F4:A1'], save_fig = False, dpi = 1000,\
+                  EEG_somno_resampled_filtered, AvailableChannels, subj_night, save_name, \
+                  RequiredChannels = ['F4'], Ref_channel = ['A1'], save_fig = False, dpi = 1000,\
                   save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis",
                   report_pearson_corr_during_sync  = False,\
                   report_spearman_corr_during_sync = False,\
-                  plot_cross_corr_lag = True):
+                  plot_cross_corr_lag = True, scale_somno = 1,\
+                  amplitude_range = [-1000e-6, 1000e-6]):
         
         """ Please note: the event detection should be preliminary given to algorithm 
         by visual inspection.
@@ -138,25 +139,25 @@ class SigQual:
         """
         # ===================== start of LRLR for sync ========================= #
     
-        # Zmax
-        LRLR_start_zmax = LRLR_start_zmax   #sec
-        LRLR_end_zmax   = LRLR_end_zmax     #sec
+        # Headband
+        LRLR_start_iBand = LRLR_start_iBand   #sec
+        LRLR_end_iBand   = LRLR_end_iBand     #sec
         
         # Somno
         LRLR_start_somno = LRLR_start_somno #sec
         LRLR_end_somno   = LRLR_end_somno   #sec
         
         # Define a period around sync point ro perform alignment
-        zmax_plotting_secs = [LRLR_start_zmax,LRLR_end_zmax]
+        iBand_plotting_secs = [LRLR_start_iBand,LRLR_end_iBand]
         somno_plotting_secs = [LRLR_start_somno, LRLR_end_somno]
         
         # Finding corresponding samples of sync period
-        zmax_plotting_samples  = np.arange(zmax_plotting_secs[0] *fs_res, zmax_plotting_secs[1] * fs_res)
+        iBand_plotting_samples  = np.arange(iBand_plotting_secs[0] *fs_res, iBand_plotting_secs[1] * fs_res)
         somno_plotting_samples = np.arange(somno_plotting_secs[0] *fs_res, somno_plotting_secs[1] * fs_res)
         
         # Convert (probable) floats into int
         somno_plotting_samples = somno_plotting_samples.astype(np.int32)
-        zmax_plotting_samples  = zmax_plotting_samples.astype(np.int32)
+        iBand_plotting_samples  = iBand_plotting_samples.astype(np.int32)
         
         # R EEG (Zmax) --> sync period
         zmax_data_R = np.ravel(data_R_resampled_filtered)
@@ -170,13 +171,28 @@ class SigQual:
         # init index of reeuired channel(s)   
         Idx               = []
         
-        # Find index of required channel(s)
-        for indx, c in enumerate(AvailableChannels):
-            if c in RequiredChannels:
-                Idx.append(indx)
+        
+        # Initializing index lists
+        Idx = []
+        Idx_Ref_channel = []
+           
+        # Find index of required channels     
+        for indx, c in enumerate(RequiredChannels):
+            if c in AvailableChannels:
+                Idx.append(AvailableChannels.index(c))
+                
+        # Find index of refernces (e.g. Mastoids) 
+                
+        if Ref_channel:
+            for indx, c in enumerate(Ref_channel):
+                if c in AvailableChannels:
+                    Idx_Ref_channel.append(AvailableChannels.index(c))
                 
         # pick Somno channel
-        Somno_reqChannel = EEG_somno_resampled_filtered[Idx,:]
+        if Ref_channel:
+            Somno_reqChannel = EEG_somno_resampled_filtered[Idx,:] - EEG_somno_resampled_filtered[Idx_Ref_channel,:]
+        else:
+            Somno_reqChannel = EEG_somno_resampled_filtered[Idx,:] 
         
         # np.ravel somno signal(s)
         Somno_reqChannel = np.ravel(Somno_reqChannel)
@@ -188,27 +204,30 @@ class SigQual:
         plt.ylabel('Amp',size = 15)
         figure.set_size_inches(32, 18)
         
-        sig_zmax     = zmax_data_R[zmax_plotting_samples]
+        sig_iBand    = zmax_data_R[iBand_plotting_samples]
         sig_somno    = Somno_reqChannel[somno_plotting_samples]
         
         # Compute correlation
-        corr = signal.correlate(sig_zmax, sig_somno)
+        corr = signal.correlate(sig_iBand, sig_somno)
         
         # find lag
-        lag = np.argmax(np.abs(corr)) - len(zmax_data_L[zmax_plotting_samples]) + 1
+        lag = np.argmax(np.abs(corr)) - len(zmax_data_R[iBand_plotting_samples]) + 1
         
         # Plot before lag correction
-        plt.plot(np.arange(0, len(zmax_plotting_samples)), sig_zmax,label = 'Zmax R EEG', color = 'black')
-        plt.plot(np.arange(0, len(somno_plotting_samples)), sig_somno, label = 'Somno F4', color = 'gray', linestyle = ':')
-        plt.title('Syncing Somno and Zmax data (Sync period only)', size = 15)
+        plt.plot(np.arange(0, len(iBand_plotting_samples)), sig_iBand,label = 'Headband EEG', color = 'black')
+        #plt.plot(np.arange(0, len(somno_plotting_samples)), sig_somno, label = 'Somno F3-F4', color = 'gray', linestyle = ':')
+        plt.title('Syncing Somno and Headband data (Sync period only) - '+str(subj_night), size = 15)
         
         # Plot after lag correction
         #plt.plot(np.arange(0+lag, len(somno_plotting_samples)+lag), sig_somno, label = 'Somno F4 - synced',color = 'red')
-        plt.plot(np.arange(0, len(somno_plotting_samples)), Somno_reqChannel[somno_plotting_samples-lag], label = 'Somno F4 - synced',color = 'red')
+        plt.plot(np.arange(0, len(somno_plotting_samples)), scale_somno*Somno_reqChannel[somno_plotting_samples-lag], label = 'Synced Somno '+str(RequiredChannels)[2:-2]+'-'+str(Ref_channel)[2:-2],color = 'red')
         #plt.plot(np.arange(0-lag, len(zmax_plotting_samples)-lag), sig_zmax, label = 'zmax - synced',color = 'cyan')
         
         plt.legend(prop={"size":20})
         
+        # Show ylim
+        if amplitude_range != None:
+            plt.ylim((amplitude_range[0], amplitude_range[1]))
         # Save figure
         if save_fig == True:
             self.save_figure(directory=save_dir, saving_name= save_name,
@@ -217,7 +236,7 @@ class SigQual:
             
         # Retrieving synced signals
         sig1 = Somno_reqChannel[somno_plotting_samples-lag]
-        sig2 = sig_zmax
+        sig2 = sig_iBand
         
         # Report Pearson correlations during sync period
         if report_pearson_corr_during_sync == True:
@@ -234,7 +253,7 @@ class SigQual:
             
             fig, ax = plt.subplots(1,1, figsize=(26, 14))
     
-            ax.plot(np.arange(-len(zmax_data_L[zmax_plotting_samples])+1,len(zmax_data_L[zmax_plotting_samples])), corr, color = 'blue')
+            ax.plot(np.arange(-len(zmax_data_R[iBand_plotting_samples])+1,len(zmax_data_R[iBand_plotting_samples])), corr, color = 'blue')
             plt.title('Cross-correlation to find lag between Zmax & Somno during eye movements', size=15)
             
             # Marking max correlation value to find lag
@@ -348,10 +367,10 @@ class SigQual:
         # Plot truncated sigs
         if plot_full_sig == True:
             plt.figure()
-            plt.plot(np.arange(0, common_length) / fs_res / 60, zmax_final, color = 'blue', label = 'Zmax R EEG')
+            plt.plot(np.arange(0, common_length) / fs_res / 60, zmax_final, color = 'blue', label = 'iBand+ Fp1-Fp2 EEG')
             plt.plot(np.arange(0, common_length) / fs_res / 60, somno_final, \
-                     color = 'red', label = 'Somno F4-A1')
-            plt.title('Complete Zmax and Somno data after full sync', size = 20)
+                     color = 'red', label = 'Somno F3-F4')
+            plt.title('Complete iBand and Somno data after initial sync', size = 20)
             plt.xlabel('Time (mins)', size = 15)
             plt.ylabel('Amplitude (v)', size = 15)
             plt.legend(prop={"size":20}, loc = "upper right") 
@@ -373,7 +392,7 @@ class SigQual:
         plt.savefig(directory+saving_name+saving_format,dpi = dpi)  
         
     #%% plot spectrogram
-    def spectrogram_creation(self, sig1, sig2, fs, save_name, save_fig = False, dpi = 1000,\
+    def spectrogram_creation(self, sig1, sig2, subj_night, fs, save_name, save_fig = False, dpi = 1000,\
                              save_dir = "F:\Zmax_Data\Results\SignalQualityAnalysis"):
         
         from lspopt import spectrogram_lspopt
@@ -399,7 +418,7 @@ class SigQual:
         plt.pcolormesh(t, f_sig1, Sxx_sig1)
         plt.ylabel('Frequency [Hz]', size=15)
         #plt.xlabel('Time [sec]', size=15)
-        plt.title('Somnoscreeen data (F4) - Multi-taper Spectrogram', size=20)
+        plt.title('Somnoscreeen data (F3-F4) - Multi-taper Spectrogram ('+str(subj_night)+")" , size=20)
         plt.colorbar()
         # ==== plot 2nd sig ==== #
         plt.axes(axs[1])
@@ -418,7 +437,7 @@ class SigQual:
         plt.pcolormesh(t, f_sig2, Sxx_sig2)
         plt.ylabel('Frequency [Hz]', size=15)
         plt.xlabel('Time [sec]', size=15)
-        plt.title('Zmax data (EEG right) - Multi-taper Spectrogram ', size=20)
+        plt.title('iBand+ data (Fp1-Fp2) - Multi-taper Spectrogram ('+str(subj_night)+")", size=20)
     
         plt.colorbar()
         #==== 1st Way =======
@@ -447,7 +466,7 @@ class SigQual:
         plt.xlim([0, 30])
         
     #%% Plot PSD
-    def psd(self, sig1, sig2, fs, NFFT = 2**11, plot_psd = True, log_power = True):
+    def psd(self, sig1, sig2, fs,subj_night, NFFT = 2**11, plot_psd = True, log_power = True):
         
         from matplotlib.mlab import psd
         
@@ -492,12 +511,12 @@ class SigQual:
             plt.axvline(12, linestyle = '--', color = 'black')
             
             # Title and labels
-            plt.title('Power spectral density throughout the night', size = 20)
+            plt.title('Power spectral density throughout the night - '+str(subj_night), size = 20)
             plt.xlabel('Frequency (Hz)', size = 20)
             plt.ylabel('Power spectral density (dB/ Hz)', size = 20)
             
             # Legend 
-            plt.legend(['Zmax EEG R', 'Somno F4'], prop = {'size':20})
+            plt.legend(['iBand+ Fp1-Fp2', 'Somno F3-F4'], prop = {'size':20})
             
             # Deactivate grid
             plt.grid(False)
@@ -527,7 +546,9 @@ class SigQual:
             
         return dic   
     #%% Window by window cross correlation
-    def win_by_win_corr(self, sig1, sig2, fs, win_size = 30, plot_synced_winodws = False):
+    def win_by_win_corr(self, sig1, sig2, fs, subj_night, win_size = 30, plot_synced_winodws = False,\
+                        plot_correlation = True, report_correlation = True,\
+                        estimate_polynomial = True, poly_order = 3):
         
         """ This function gets the signals which have been already synced based 
         on an event.(e.g. using self.sync_data function)
@@ -550,6 +571,8 @@ class SigQual:
         list_spearman_pval   = []
         signal1_dic_windowed = dict()
         signal2_dic_windowed = dict()
+        signal1_dic_windowed_before_sync = dict()
+        signal2_dic_windowed_before_sync = dict()
         Outcome_dic_windowed = dict()
         f_coherence          = dict()
         overall_Cxy          = np.empty((0, 129))
@@ -616,6 +639,10 @@ class SigQual:
             signal1_dic_windowed['window'+str(i)] = curr_sig1
             signal2_dic_windowed['window'+str(i)] = curr_sig2_synced
             
+            # Also store non-synced signals
+            signal1_dic_windowed_before_sync['window'+str(i)] = curr_sig1
+            signal2_dic_windowed_before_sync['window'+str(i)] = curr_sig2
+            
             if plot_synced_winodws==True:
                 # Plot before lag correction
                 plt.plot(plotting_samples, curr_sig1,label = 'Signal1 (reference)', color = 'black')
@@ -626,8 +653,52 @@ class SigQual:
                 plt.plot(plotting_samples, curr_sig2_synced, label = 'Signal2 - synced',color = 'red')
                 
                 plt.legend(prop={"size":20})
-                
-            # Remove varialbles for next iteration
+        
+        # Fit a polynomial to correelation values
+        if estimate_polynomial ==True:
+            
+            # find coefficients for polynomial
+            coefficients = np.polyfit(np.arange(len(list_pearson_corr)), list_pearson_corr, poly_order)
+            poly = np.poly1d(coefficients)
+            estimated_y = poly(np.arange(len(list_pearson_corr)))
+            
+        # Plot cross-corr and p-values
+        if plot_correlation == True:
+            fig1 = plt.figure()
+            
+            # Plot plearson corr
+            plt.subplot(2, 1, 1)
+            plt.stem(np.arange(len(list_pearson_corr)), list_pearson_corr,label = 'Pearson corr',\
+                     markerfmt = 'black')
+            plt.title('Pearson corr per epoch - ' + str(subj_night))
+            plt.xlabel('Epoch #')
+            plt.ylabel('Pearson corr')
+            plt.xlim([0,len(list_pearson_corr)])
+            
+            # Plot the fitted polynomial, if requested
+            if estimate_polynomial ==True:
+                plt.plot(np.arange(len(list_pearson_corr)), estimated_y, color = 'red',\
+                         linewidth = 3, label = "Fitted polynomial - order: "+str(poly_order))
+            
+            # Plot a threshold line on a specific corr value, e.g. 30%
+            thresh = [0.3]
+            plt.plot(np.arange(len(list_pearson_corr)),thresh * len(list_pearson_corr),'c:',\
+                     linewidth = 3,label = "threshold for Pearson R "+str(thresh))
+            plt.legend()    
+            
+            # Plot p-values
+            plt.subplot(2, 1, 2)
+            plt.stem(np.arange(len(list_pearson_pval)), list_pearson_pval)
+            plt.title('P-values of pearson corr per epoch')
+            plt.ylim((0, .05))
+            plt.xlabel('Epoch #')    
+            plt.ylabel('p-value')
+            plt.rcParams.update({'font.size': 15})
+            plt.xlim([0,len(list_pearson_corr)])
+            
+        # Report pearson_corr and corresponding p-values
+        if report_correlation == True:
+            print(f'Mean of pearson corr among all windows: {np.mean(list_pearson_corr)} +- {np.std(list_pearson_corr)}')
                 
         # pack all outcomes to return 
         Outcome_dic_windowed['Pearson_corr']     = list_pearson_corr
@@ -641,6 +712,8 @@ class SigQual:
         Outcome_dic_windowed['Coherence']        = overall_Cxy
         Outcome_dic_windowed['signal1_full']     = sig1
         Outcome_dic_windowed['signal2_full']     = sig2
+        Outcome_dic_windowed['signal1_windowed_before_sync'] = signal1_dic_windowed_before_sync
+        Outcome_dic_windowed['signal2_windowed_before_sync'] = signal2_dic_windowed_before_sync
         return Outcome_dic_windowed
     
     #%% Compute coherence per synced window    
@@ -1367,10 +1440,333 @@ class SigQual:
                                  str(subj_night[i]),
                                  dpi=300, saving_format = '.png',
                                  full_screen = False)
+                    
+#%% Periodic sync
+    def periodic_sync_to_compensate_drift(self, Output_dic, iBand_final, \
+                                          somno_final, sync_periodicity = 100,
+                                          fs = 256, win_size = 30):
+        
+        """ Uisng this function one can align the data of a headband and a 
+        golden standard after every specific number of epochs (sync_periodicity).
+        This function doesn't touch golden standard signal after initial alignemnet
+        (which has to be already done). Instead, it syncs the investigational headband
+        data. """
+        
+        #Receive all the lags
+        Lags_samp = Output_dic['lags_sample']
+        Lags_samp_old = Lags_samp
+        # create temp signals to
+        sig_headband_tmp = np.expand_dims(iBand_final, axis = 1)
+        
+        
+        # Create loop for periodic sync
+        for i in np.arange(sync_periodicity, len(Lags_samp)-1, sync_periodicity):
             
+            # initiate neighb_lag
+            neighb_lag = []
+                        
+            # First iteration: Get the beginning "n" epochs
+            if i == sync_periodicity:
+                
+                periodically_synced_iBand = sig_headband_tmp[0:i * fs * win_size]                
             
+            # compute the mean of lag in the neighbouring epochs [-2, -1,  0,  1,  2]
             
+            for j in np.arange(-2,3):
+                
+                # Define a threshold to exclude lags computed from noisy epochs
+                if Lags_samp[i+j] > -(8 * fs) and  Lags_samp[i+j] < -250:
+                    
+                    neighb_lag.append(Lags_samp[i+j])
+                    
+            # Mean periodic lag
+            mean_neighb_lag = int(np.floor(np.mean(neighb_lag)))
             
+            # compensate the lag for all Lags_samp
+            Lags_samp = [x - mean_neighb_lag for x in Lags_samp]
+            
+            # Keep prior portion up to sync point from headband signal
+            periodically_synced_iBand = np.row_stack((periodically_synced_iBand,\
+                                        sig_headband_tmp[i * fs * win_size + mean_neighb_lag:(i+sync_periodicity) * fs * win_size + mean_neighb_lag]))
+        
+    #%% Sync signal based on a window-by-window correlation
+                
+    def win_by_win_drift_compensation(self, sig1, sig2, fs, win_size = 30, plot_synced_winodws = True,\
+                        plot_correlation = True, report_correlation = True,\
+                        drift_comp_thresh = 5):
+            
+        # init lists/dicts to save outputs
+        list_lags            = []
+        list_pearson_corr    = []
+        list_pearson_pval    = []
+        list_spearman_corr   = []
+        list_spearman_pval   = []
+        signal1_dic_windowed = dict()
+        signal2_dic_windowed = dict()
+        signal1_dic_windowed_before_sync = dict()
+        signal2_dic_windowed_before_sync = dict()
+        Outcome_dic_windowed = dict()
+        f_coherence          = dict()
+        overall_Cxy          = np.empty((0, 129))
+        
+        # define epoch size
+        len_epoch   = fs * win_size
+        
+        # Change dimensionality of sigs
+        sig1        = np.expand_dims(sig1, axis = 1) 
+        sig2        = np.expand_dims(sig2, axis = 1) 
+        
+        # Init lags
+        lag     = 0
+        lag_tmp = 0
+        
+        # Define the loop of window size 
+        for i in np.arange(0,200):#for i in np.arange(0, np.floor(np.shape(sig1)[0] / (fs * win_size)) - 1):
+            i = int(i)
+            
+            # define the sample range of the current window
+            lower_boundary_samples  = i * win_size * fs
+            higher_boundary_samples = (i+1) * win_size * fs
+            next_epoch_end_samples  = (i+2) * win_size * fs
+            
+            # merging current samples
+            plotting_samples = np.arange(lower_boundary_samples, higher_boundary_samples)
+            
+            # Next epoch range
+            next_epoch_samps = np.arange(higher_boundary_samples, next_epoch_end_samples)
+            
+            # designing current windows of signal 1
+            
+            if lag >= 0:
+        
+                curr_sig1 = sig1[plotting_samples - lag]
+                
+            else:
+                curr_sig1 = sig1[plotting_samples + lag]
+            
+            # designing current windows of signal 2
+            curr_sig2 = sig2[plotting_samples]
+            
+            # 1st Itration? keep iBand sig as is
+            if i == 0:
+                periodically_synced_sig1 = curr_sig1
+                
+            # Compute correlation
+            corr = signal.correlate(curr_sig1, curr_sig2)
+            
+            # find lag (either positive or negative)
+            min_max_corr = np.abs([np.min(corr), np.max(corr)])
+            
+            # Is the lag neg or pos?
+            corr_sign = np.max(min_max_corr)
+            
+            # ============= Shift sig 1 FORWARD if the corr < 0 ============= #
+            if corr_sign == min_max_corr[0]: # if negative corr
+                
+                lag_tmp  = np.argmin(corr) - len(curr_sig1) + 1
+                
+                # Define threshold of acceptable lag 
+                if np.abs(lag_tmp) < drift_comp_thresh * fs:
+                    
+                    print(f'lag withing the threshold ({lag_tmp/fs} secs)')
+                    
+                    # shift iBand signal "OF NEXT EPOCH" to sync with ground truth
+                    next_epoch_sig1_synced = sig1[next_epoch_samps + lag]
+                    
+                    # Maybe due to noise, corr exceeds thresh --> keep it without change
+                else:
+                    print(f'lag bigger than threshold ({lag_tmp/fs} secs)')
+                    next_epoch_sig1_synced = sig1[next_epoch_samps]
                 
                 
+            # =========== Shift sig 1 BACKWARD if the corr > 0 ============== #
+            else:   # if positive corr
                 
+                lag_tmp  = np.argmax(corr) - len(curr_sig1) + 1
+                
+                # Define threshold of acceptable lag 
+                if np.abs(lag_tmp) < drift_comp_thresh * fs:
+                    
+                    print(f'lag withing the threshold ({lag_tmp/fs} secs)')
+                    
+                    # shift iBand signal "OF NEXT EPOCH" to sync with ground truth
+                    next_epoch_sig1_synced = sig1[next_epoch_samps - lag]
+                    
+                    # Maybe due to noise, corr exceeds thresh --> keep it without change
+                else:
+                    print(f'lag bigger than threshold ({lag_tmp/fs} secs)')
+                    next_epoch_sig1_synced = sig1[next_epoch_samps]
+             
+            # Store the overall trend of lag over epochs
+            lag =lag + lag_tmp
+# =============================================================================
+#             # find lag
+#             #lag_tmp  = np.argmax(np.abs(corr)) - len(curr_sig1) + 1
+#             lag_tmp  = np.argmax(corr) - len(curr_sig1) + 1
+#             lag = lag + lag_tmp
+#             
+#             # Define threshold of acceptable lag 
+#             if np.abs(lag_tmp) < drift_comp_thresh * fs:
+#                 print(f'lag withing the threshold ({lag_tmp/fs} secs)')
+#                 # shift iBand signal "OF NEXT EPOCH" to sync with ground truth
+#                 next_epoch_sig1_synced = sig1[next_epoch_samps - lag]
+#                 
+#                 # Maybe due to noise, corr exceed thresh --> keep it without change
+#             else:
+#                 print(f'lag bigger than threshold ({lag_tmp/fs} secs)')
+#                 next_epoch_sig1_synced = sig1[next_epoch_samps]
+# =============================================================================
+            
+            # Concatenate the next to the current epoch
+            periodically_synced_sig1 = np.row_stack((periodically_synced_sig1,\
+                                                     next_epoch_sig1_synced))
+            
+            # Make next epoch sig 2 to compute correlaiton
+            next_epoch_sig2 = sig2[next_epoch_samps]   
+                
+            # Compute Pearson corr of the current win
+            pear_corr, pear_pval = self.pearson_corr(next_epoch_sig1_synced, next_epoch_sig2, abs_value = True , print_results = False)
+            
+            # Compute Spearman corr of the current win
+            spea_corr, spea_pval = self.spearman_corr(next_epoch_sig1_synced, next_epoch_sig2, abs_value = True, print_results = False)
+            
+            # Concatenate the values of pearson and spearman corr per window
+            list_pearson_corr.append(pear_corr)
+            list_pearson_pval.append(pear_pval)
+            list_spearman_corr.append(spea_corr)
+            list_spearman_pval.append(spea_pval)
+            
+            # concatenate lags per win
+            list_lags.append(lag)
+            
+            # Convert lags: smaples --> secs
+            list_lags_sec = [x / fs for x in list_lags]
+            
+            # Also keep the synced signals for any further analysis
+            signal1_dic_windowed['window'+str(i)] = curr_sig1
+            signal2_dic_windowed['window'+str(i)] = curr_sig2
+            
+            # Also store non-synced signals
+            signal1_dic_windowed_before_sync['window'+str(i)] = curr_sig1
+            signal2_dic_windowed_before_sync['window'+str(i)] = curr_sig2
+            
+        # Plot cross-corr and p-values
+        if plot_correlation == True:
+            fig1 = plt.figure()
+            
+            # Plot plearson corr
+            plt.subplot(2, 1, 1)
+            plt.plot(np.arange(len(list_pearson_corr)), list_pearson_corr)
+            plt.title('Pearson corr per epoch')
+            
+            # Plot p-values
+            plt.subplot(2, 1, 2)
+            plt.plot(np.arange(len(list_pearson_pval)), list_pearson_pval)
+            plt.title('P-values of pearson corr per epoch')
+            plt.ylim((0, .05))
+                
+        # Report pearson_corr and corresponding p-values
+        if report_correlation == True:
+            print(f'Mean of pearson corr among all windows: {np.mean(list_pearson_corr)} +- {np.std(list_pearson_corr)}')
+                
+        # pack all outcomes to return 
+        Outcome_dic_windowed['Pearson_corr']     = list_pearson_corr
+        Outcome_dic_windowed['Pearson_pval']     = list_pearson_pval
+        Outcome_dic_windowed['Spearman_corr']    = list_spearman_corr
+        Outcome_dic_windowed['Spearman_pval']    = list_spearman_pval
+        Outcome_dic_windowed['lags_sample']      = list_lags
+        Outcome_dic_windowed['lags_sec']         = list_lags_sec
+        Outcome_dic_windowed['signal1_windowed'] = signal1_dic_windowed
+        Outcome_dic_windowed['signal2_windowed'] = signal2_dic_windowed
+        Outcome_dic_windowed['Coherence']        = overall_Cxy
+        Outcome_dic_windowed['signal1_full']     = sig1
+        Outcome_dic_windowed['signal2_full']     = sig2
+        Outcome_dic_windowed['signal1_windowed_before_sync'] = signal1_dic_windowed_before_sync
+        Outcome_dic_windowed['signal2_windowed_before_sync'] = signal2_dic_windowed_before_sync
+        return Outcome_dic_windowed, periodically_synced_sig1
+    
+    
+    #%% Create COMPLETE signals after synchronization
+    
+    def derive_final_sigs_after_init_and_periodic_alignment(self, LRLR_start_somno, LRLR_start_zmax, fs_res,
+                                 lag, full_sig_somno_before_sync, full_sig_zmax_before_sync,\
+                                 subj_night, regression_slope,\
+                                 plot_full_sig = False,\
+                                 epoch_periodic_alignment = 50,\
+                                 standardize_data = True, amplitude_range = None):
+        
+        LRLR_start_zmax = int(LRLR_start_zmax)
+        
+        # rough lag 
+        rough_lag = (LRLR_start_somno - LRLR_start_zmax) * fs_res
+        
+        # Total lag = rough lag +- lag during sync
+        total_lag_init = int(rough_lag - lag)
+        
+        # truncate the lag period from somno BEGINNING
+        truncated_beginning_somno = full_sig_somno_before_sync[total_lag_init:]
+        
+        # Truncate the end of LONGER signal
+        len_s = len(truncated_beginning_somno)
+        len_z = len(full_sig_zmax_before_sync)
+        
+        # find the rest of signal duration after initial sync
+        iBand_length_after_init_sync = np.floor((len(full_sig_zmax_before_sync)/fs_res - LRLR_start_zmax))
+        n_epochs_after_sync = int(np.floor(iBand_length_after_init_sync / 30))
+        
+        # Compute estimated lag over every n epochs for periodic alignmnet
+        t_regression = int(np.floor((epoch_periodic_alignment * regression_slope) * fs_res))
+        
+        # Final_sig
+        Final_sig_headband = full_sig_zmax_before_sync[:LRLR_start_zmax * fs_res]
+        
+        # Go over every n epochs for periodic alignmnet
+        for j in np.arange(epoch_periodic_alignment,n_epochs_after_sync, epoch_periodic_alignment):
+            
+            # Separate the signal to before and after periodic event
+            sig_tmp_before_event = full_sig_zmax_before_sync[(LRLR_start_zmax + 30*(j-epoch_periodic_alignment)) * fs_res : (LRLR_start_zmax + 30*j) * fs_res]
+            sig_tmp_after_event  = full_sig_zmax_before_sync[(LRLR_start_zmax + 30*j) * fs_res:]                                                                                                                                                                                                          
+                
+            # Append sig_tmp_before_event to final
+            Final_sig_headband = np.append(Final_sig_headband, sig_tmp_before_event) 
+                                             
+            # Copy the ending "t_regression" amount of before periodic event sig
+            copy_tmp = sig_tmp_before_event[-t_regression:]
+            
+            # Append the copied section to the "sig_tmp_before_event"
+            Final_sig_headband= np.append(Final_sig_headband, copy_tmp)
+        
+        # Adding the remaining tail of signals, after the last periodic alignment
+        Final_sig_headband  =  np.append(Final_sig_headband, sig_tmp_after_event)
+        Final_sig_reference =  truncated_beginning_somno[:len(Final_sig_headband)]
+        
+        # Standardize 
+        if standardize_data == True:
+            try:
+                Final_sig_headband  = self.Standardadize_data_fit_transform(Final_sig_headband)
+                Final_sig_reference = self.Standardadize_data_fit_transform(Final_sig_reference)
+                
+            except ValueError:
+                Final_sig_headband  = self.Standardadize_data_fit_transform(np.expand_dims(Final_sig_headband, axis = 1))
+                Final_sig_reference = self.Standardadize_data_fit_transform(np.expand_dims(Final_sig_reference, axis = 1))
+            
+        # Calculate final length
+        common_length = np.min([len_s, len_z])  
+        
+        # Plot truncated sigs
+        if plot_full_sig == True:
+            plt.figure()
+            plt.plot(np.arange(0, len(Final_sig_headband)) / fs_res / 60, Final_sig_headband, label = 'iBand+ Fp1-Fp2 EEG')
+            plt.plot(np.arange(0, len(Final_sig_reference)) / fs_res / 60, Final_sig_reference, \
+                     color = 'red', label = 'Somno F3-F4')
+            plt.title('Complete iBand and Somno data after initial sync - '+str(subj_night), size = 20)
+            plt.xlabel('Time (mins)', size = 15)
+            plt.ylabel('Amplitude (v)', size = 15)
+            plt.legend(prop={"size":20}, loc = "upper right") 
+            
+            # Show ylim
+            if amplitude_range != None:
+                plt.ylim((amplitude_range[0], amplitude_range[1]))
+        
+        return Final_sig_headband, Final_sig_reference, total_lag_init
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Plot section ~~~~~~~~~~~~~~~~~~~~~~~~~ #
